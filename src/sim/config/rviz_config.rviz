@@ -1,0 +1,13 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Displays:
+    - Class: rviz_default_plugins/LaserScan
+      Name: LaserScan
+      Topic: /scan
+      Size (Pixels): 3
+      Style: Points
+      Use Fixed Frame: laser_link
+  Global Options:
+    Fixed Frame: laser_link
