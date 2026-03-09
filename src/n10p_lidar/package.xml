@@ -3,7 +3,7 @@
 <package format="3">
   <name>n10p_lidar</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>Mapping with N10P lidar</description>
   <maintainer email="3978105132@qq.com">rc3</maintainer>
   <license>TODO: License declaration</license>
 
@@ -12,6 +12,9 @@
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 
+  <exec_depend>lslidar_driver</exec_depend>
+  <exec_depend>slam_toolbox</exec_depend>
+  
   <export>
     <build_type>ament_cmake</build_type>
   </export>
