@@ -61,7 +61,7 @@ namespace lslidar_driver
 		interface_selection = std::string("net");
 		frame_id = std::string("laser_link");
 		scan_topic = std::string("/scan");
-		lidar_name = std::string("M10");
+		lidar_name = std::string("N10_P");
 		pointcloud_topic = std::string("/lslidar_point_cloud");
 		is_start = true;
 		min_range = 0.3;
@@ -416,13 +416,18 @@ namespace lslidar_driver
 		this->declare_parameter<std::string>("serial_port_", "/dev/ttyUSB0");
 		this->get_parameter("serial_port_", serial_port_);
 		serial_ = LSIOSR::instance(serial_port_, baud_rate_);
+		    
+		RCLCPP_INFO(this->get_logger(), "[DEBUG] Opening serial port: %s", serial_port_.c_str());
+		
 		code = serial_->init();
 		if (code != 0)
-		{
+		{	
+			RCLCPP_ERROR(this->get_logger(), "[DEBUG] open_port %s ERROR! code=%d", serial_port_.c_str(), code);
 			printf("open_port %s ERROR !\n", serial_port_.c_str());
 			rclcpp::shutdown();
 			exit(0);
 		}
+		RCLCPP_INFO(this->get_logger(), "[DEBUG] open_port %s OK!", serial_port_.c_str());
 		printf("open_port %s OK !\n", serial_port_.c_str());
 	}
 
@@ -529,7 +534,7 @@ namespace lslidar_driver
 		else
 			link_time = 0;
 
-		if (link_time > 150)
+		if (link_time > 500)
 		{
 			serial_->close();
 			int ret = serial_->init();
@@ -544,6 +549,9 @@ namespace lslidar_driver
 
 	int LslidarDriver::receive_data(unsigned char *packet_bytes)
 	{
+		RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 1000, 
+        "[DEBUG] receive_data: waiting for packets...");
+
 		int link_time = 0;
 		int len_H = 0;
 		int len_L = 0;
@@ -554,6 +562,9 @@ namespace lslidar_driver
 		{
 			count = serial_->read(packet_bytes, 1);
 			LslidarDriver::recvThread_crc(count, link_time);
+
+			RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+            "[DEBUG] receive_data: count=%d, link_time=%d", count, link_time);
 		}
 		if (packet_bytes[0] != 0xA5)
 			return 0;
@@ -607,10 +618,27 @@ namespace lslidar_driver
 		}
 		if (lidar_name == "N10" || lidar_name == "L10" || lidar_name == "N10_P")
 		{
-			if (packet_bytes[PACKET_SIZE - 1] != N10_CalCRC8(packet_bytes, PACKET_SIZE - 1))
-				return 0;
+    		uint8_t expected_crc = N10_CalCRC8(packet_bytes, PACKET_SIZE - 1);
+    		uint8_t actual_crc = packet_bytes[PACKET_SIZE - 1];
+
+    		RCLCPP_INFO(this->get_logger(),
+        		"[CRC] Expected: 0x%02X, Got: 0x%02X, Match: %d",
+        		expected_crc, actual_crc,
+        		actual_crc == expected_crc);
+
+    		if (actual_crc != expected_crc)
+    		{
+        		RCLCPP_ERROR(this->get_logger(),
+            		"[CRC] Packet dropped! CRC mismatch");
+        		return 0;
+    		}
 		}
-		return len;
+
+		RCLCPP_INFO(this->get_logger(), 
+   			"[DEBUG] receive_data: len=%d, header=0x%02X 0x%02X", 
+   			len, packet_bytes[0], packet_bytes[1]);
+
+		return len;   // <--- ONLY ONE RETURN AT THE END
 	}
 
 	uint8_t LslidarDriver::N10_CalCRC8(unsigned char *p, int len)
@@ -797,6 +825,11 @@ namespace lslidar_driver
 
 	void LslidarDriver::data_processing_2(unsigned char *packet_bytes, int len) // 处理每一包的数据
 	{
+		
+		RCLCPP_INFO(this->get_logger(), 
+            "[DEBUG] data_processing_2: len=%d, PACKET_SIZE=%d, package_points=%d",
+            len, PACKET_SIZE, package_points);
+
 		double degree;
 		double end_degree;
 		double degree_interval = 15.0;
@@ -893,11 +926,20 @@ namespace lslidar_driver
 					scan_points_[idx].degree = degree + (degree_interval / invalidValue * num) - 360;
 				else
 					scan_points_[idx].degree = degree + (degree_interval / invalidValue * num);
+
+				RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 100,
+            "[DEBUG] Packet: idx=%d, degree=%f, last_degree=%f, range=%f",
+            idx, scan_points_[idx].degree, last_degree, scan_points_[idx].range);
 			}
 			else
 				continue;
 			if (((scan_points_[idx].degree < last_degree && scan_points_[idx].degree < 5 && last_degree > 355) || idx >= points_size_) && idx > 10)
 			{
+   				
+				RCLCPP_INFO(this->get_logger(), 
+            		"[DEBUG] Scan complete: idx=%d, count_num=%d, last_degree=%f",
+                	idx, count_num, last_degree);
+
 				last_degree = scan_points_[idx].degree;
 				count_num = idx;
 				idx = 0;
@@ -967,6 +1009,9 @@ namespace lslidar_driver
 			}
 			if (lidar_name == "N10_P" || lidar_name == "M10_DOUBLE")
 			{
+
+				RCLCPP_INFO(this->get_logger(), "[DEBUG] pubScanThread: publishing scan, count_num=%d", count_num);
+
 				if (pubScan)
 				{
 					auto scan = sensor_msgs::msg::LaserScan::UniquePtr(new sensor_msgs::msg::LaserScan());
@@ -1356,6 +1401,9 @@ namespace lslidar_driver
 					difop = false;
 					len = 0;
 					len = LslidarDriver::receive_data(packet_bytes);
+					
+					RCLCPP_INFO(this->get_logger(), "[DEBUG] polling: receive_data returned len=%d", len);
+					
 					if ((lidar_name == "M10" || lidar_name == "M10_DOUBLE" || lidar_name == "M10_GPS" || lidar_name == "M10_P" || lidar_name == "M10_PLUS") && compensation)
 					{
 						if (packet_bytes[2] == 0x55 && packet_bytes[3] == 0x00 && packet_bytes[186] == 0xFA && packet_bytes[187] == 0xFB)

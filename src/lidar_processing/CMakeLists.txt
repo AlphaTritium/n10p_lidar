@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(n10p_lidar)
+project(lidar_processing)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -7,12 +7,30 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
-# uncomment the following section in order to fill in
-# further dependencies manually.
-# find_package(<dependency> REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(laser_geometry REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(pcl_conversions REQUIRED)
 
-install(DIRECTORY launch
-  DESTINATION share/${PROJECT_NAME}
+# Add the executable
+add_executable(lidar_processor src/lidar_processor.cpp)
+
+# Specify dependencies
+ament_target_dependencies(lidar_processor
+  rclcpp
+  sensor_msgs
+  laser_geometry
+  tf2
+  tf2_ros
+  pcl_conversions
+)
+
+# Install the executable
+install(TARGETS
+  lidar_processor
+  DESTINATION lib/${PROJECT_NAME}
 )
 
 if(BUILD_TESTING)
@@ -28,3 +46,6 @@ if(BUILD_TESTING)
 endif()
 
 ament_package()
+
+
+

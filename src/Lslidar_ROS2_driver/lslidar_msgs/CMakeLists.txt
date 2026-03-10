@@ -28,6 +28,8 @@ if(BUILD_TESTING)
 endif()
 
 rosidl_generate_interfaces(lslidar_msgs
+  "msg/DetectedObject.msg"
+  "msg/DetectedObjects.msg"
   "msg/LslidarDifop.msg"
   "msg/LslidarPacket.msg"
   "msg/LslidarPoint.msg"

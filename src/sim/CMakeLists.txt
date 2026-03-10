@@ -10,10 +10,18 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(laser_geometry REQUIRED)
+find_package(pcl_conversions REQUIRED)
+find_package(lslidar_msgs REQUIRED)
 
-# Application node
 add_executable(lidar_app_node src/lidar_app_node.cpp)
-ament_target_dependencies(lidar_app_node rclcpp sensor_msgs)
+ament_target_dependencies(lidar_app_node
+  rclcpp
+  sensor_msgs
+  laser_geometry
+  pcl_conversions
+  lslidar_msgs
+)
 
 install(TARGETS
   lidar_app_node

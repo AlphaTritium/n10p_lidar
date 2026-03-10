@@ -137,7 +137,7 @@ int LSIOSR::read(unsigned char *buffer, int length, int timeout)
       return (rc == 0) ? 0 : -1;
     }
 
-    int	retry = 3;
+    int	retry = 10;
     while (length > 0)
     {
       rc = ::read(fd_, pb, (size_t)length);
