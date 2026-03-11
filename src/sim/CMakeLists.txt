@@ -13,6 +13,10 @@ find_package(sensor_msgs REQUIRED)
 find_package(laser_geometry REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(lslidar_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(PCL REQUIRED COMPONENTS common io filters segmentation kdtree search surface)
 
 add_executable(lidar_app_node src/lidar_app_node.cpp)
 ament_target_dependencies(lidar_app_node
@@ -23,8 +27,28 @@ ament_target_dependencies(lidar_app_node
   lslidar_msgs
 )
 
+target_link_libraries(lidar_app_node
+  ${PCL_LIBRARIES}
+)
+
+add_executable(lidar_pointcloud_processor src/lidar_pointcloud_processor.cpp)
+ament_target_dependencies(lidar_pointcloud_processor
+  rclcpp
+  sensor_msgs
+  pcl_conversions
+  lslidar_msgs
+  nav_msgs
+  visualization_msgs
+  tf2_ros
+)
+
+target_link_libraries(lidar_pointcloud_processor
+  ${PCL_LIBRARIES}
+)
+
 install(TARGETS
   lidar_app_node
+  lidar_pointcloud_processor
   DESTINATION lib/${PROJECT_NAME}
 )
 

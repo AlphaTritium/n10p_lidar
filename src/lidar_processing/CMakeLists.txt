@@ -13,18 +13,32 @@ find_package(laser_geometry REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(pcl_conversions REQUIRED)
+find_package(PCL REQUIRED COMPONENTS common io filters segmentation kdtree search)
+find_package(lslidar_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
 
 # Add the executable
 add_executable(lidar_processor src/lidar_processor.cpp)
 
+target_include_directories(lidar_processor PUBLIC
+  ${rclcpp_INCLUDE_DIRS}
+  ${PCL_INCLUDE_DIRS}
+  ${lslidar_msgs_INCLUDE_DIRS}
+  ${visualization_msgs_INCLUDE_DIRS}
+)
+
 # Specify dependencies
 ament_target_dependencies(lidar_processor
   rclcpp
+  std_msgs
   sensor_msgs
-  laser_geometry
-  tf2
-  tf2_ros
   pcl_conversions
+  lslidar_msgs
+  visualization_msgs
+)
+
+target_link_libraries(lidar_processor
+  ${PCL_LIBRARIES}
 )
 
 # Install the executable

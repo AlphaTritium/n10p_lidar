@@ -74,30 +74,38 @@ def generate_launch_description():
     )
 
     # Processor node
-    processor_node = Node(
-        package='lidar_processing',
-        executable='lidar_processor',
-        name='lidar_processor',
+    pointcloud_processor_node = Node(
+        package='sim',
+        executable='lidar_pointcloud_processor',
+        name='lidar_pointcloud_processor',
         output='screen',
         parameters=[{
-            'input_scan_topic': '/scan',
-            'output_scan_topic': '/scan_filtered',
+            'input_topic': '/lslidar_point_cloud',  # From driver
+            'output_scan_topic': '/scan_processed',
+            'output_cloud_topic': '/cloud_processed',
             'range_min': 0.15,
             'range_max': 12.0,
-            'publish_cloud': False,
-            'target_frame': 'laser',
+            'z_min': -0.5,
+            'z_max': 2.0,
+            'voxel_leaf_size': 0.05,
+            'cluster_min_size': 5,
+            'cluster_max_size': 1000,
+            'cluster_tolerance': 0.2,
+            'publish_filtered_cloud': True,
+            'detect_objects': True,
+            'classify_surfaces': True,
             'use_sim_time': LaunchConfiguration('use_sim_time')
         }]
     )
 
-    # Detector node
+    # Detector node (uses processed scan)
     detector_node = Node(
         package='sim',
         executable='lidar_app_node',
         name='lidar_detector',
         output='screen',
         parameters=[{
-            'input_scan_topic': '/scan_filtered',
+            'input_scan_topic': '/scan_processed',  # Changed from /scan_filtered
             'cluster_tolerance': 0.1,
             'min_cluster_size': 5,
             'max_cluster_size': 100,
@@ -118,7 +126,7 @@ def generate_launch_description():
             ]),
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ],
-        remappings=[('/scan', '/scan_filtered')],
+        remappings=[('/scan', '/scan_processed')],  # Changed from /scan_filtered
         output='screen'
     )
 
@@ -145,7 +153,7 @@ def generate_launch_description():
         baudrate_arg,
         real_driver_launch,
         sim_launch,
-        processor_node,
+        pointcloud_processor_node,
         detector_node,
         slam_node,
         rviz_node,

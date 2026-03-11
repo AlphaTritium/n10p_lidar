@@ -1,18 +1,28 @@
 #include <rclcpp/rclcpp.hpp>
-#include <sensor_msgs/msg/laser_scan.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
-#include <laser_geometry/laser_geometry.hpp>  // For LaserProjection
-#include <vector>
-#include <algorithm>
-#include <limits>   // for quiet_NaN
+#include <sensor_msgs/msg/laser_scan.hpp>
+#include <pcl_conversions/pcl_conversions.h>
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl/filters/voxel_grid.h>
+#include <pcl/filters/passthrough.h>
+#include <pcl/segmentation/sac_segmentation.h>
+#include <pcl/segmentation/extract_clusters.h>
+#include <pcl/sample_consensus/method_types.h>
+#include <pcl/sample_consensus/model_types.h>
+#include <pcl/kdtree/kdtree.h>
+#include <pcl/common/centroid.h>
+#include <lslidar_msgs/msg/detected_objects.hpp>
+#include <lslidar_msgs/msg/detected_object.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
+#include <limits>
+#include <cmath>
 
 class LidarProcessor : public rclcpp::Node
 {
 public:
     LidarProcessor() : Node("lidar_processor")
     {
-        // ---- Declare and retrieve parameters ----
-        // These can be changed at runtime via the parameter server or launch file.
         this->declare_parameter<std::string>("input_scan_topic", "/scan");
         this->declare_parameter<std::string>("output_scan_topic", "/scan_filtered");
         this->declare_parameter<std::string>("output_cloud_topic", "");
@@ -29,17 +39,13 @@ public:
         publish_cloud_ = this->get_parameter("publish_cloud").as_bool();
         target_frame_  = this->get_parameter("target_frame").as_string();
 
-        // ---- Create subscriber for raw scans ----
         sub_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
             input_topic_, 10, std::bind(&LidarProcessor::scan_callback, this, std::placeholders::_1));
 
-        // ---- Create publisher for filtered scans ----
         pub_scan_ = this->create_publisher<sensor_msgs::msg::LaserScan>(output_topic_, 10);
 
-        // ---- Optional point cloud publisher ----
         if (publish_cloud_ && !cloud_topic_.empty()) {
             pub_cloud_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(cloud_topic_, 10);
-            projector_ = std::make_shared<laser_geometry::LaserProjection>();
         }
 
         RCLCPP_INFO(this->get_logger(), "LidarProcessor started");
@@ -53,37 +59,52 @@ public:
 private:
     void scan_callback(const sensor_msgs::msg::LaserScan::SharedPtr raw_msg)
     {
-        // Create a copy of the incoming scan – we'll modify the ranges.
         auto filtered_msg = std::make_shared<sensor_msgs::msg::LaserScan>(*raw_msg);
 
-        // Apply range filtering to each measurement.
         for (size_t i = 0; i < filtered_msg->ranges.size(); ++i) {
             float& r = filtered_msg->ranges[i];
 
-            // If the range is not finite (NaN, inf) or below minimum, set to NaN (invalid).
             if (!std::isfinite(r) || r < range_min_) {
                 r = std::numeric_limits<float>::quiet_NaN();
             }
-            // If above maximum, clip to maximum.
             else if (r > range_max_) {
                 r = range_max_;
             }
         }
 
-        // (Optional) You could also filter intensities here if needed.
-
-        // Publish the filtered scan.
         pub_scan_->publish(*filtered_msg);
 
-        // Optionally project the filtered scan to a point cloud.
         if (publish_cloud_ && pub_cloud_) {
             sensor_msgs::msg::PointCloud2 cloud;
-            // laser_geometry::LaserProjection converts LaserScan to PointCloud2.
-            projector_->projectLaser(*filtered_msg, cloud);
-            // Make sure the cloud has the correct target frame (e.g., "laser").
+            convertLaserScanToPointCloud2(*filtered_msg, cloud);
             cloud.header.frame_id = target_frame_;
             pub_cloud_->publish(cloud);
         }
+    }
+
+    void convertLaserScanToPointCloud2(const sensor_msgs::msg::LaserScan& scan, sensor_msgs::msg::PointCloud2& cloud)
+    {
+        pcl::PointCloud<pcl::PointXYZI>::Ptr pcl_cloud(new pcl::PointCloud<pcl::PointXYZI>);
+        
+        for (size_t i = 0; i < scan.ranges.size(); ++i) {
+            float range = scan.ranges[i];
+            if (std::isfinite(range)) {
+                pcl::PointXYZI point;
+                double angle = scan.angle_min + i * scan.angle_increment;
+                point.x = range * cos(angle);
+                point.y = range * sin(angle);
+                point.z = 0.0;
+                if (i < scan.intensities.size()) {
+                    point.intensity = scan.intensities[i];
+                } else {
+                    point.intensity = 0.0;
+                }
+                pcl_cloud->push_back(point);
+            }
+        }
+        
+        pcl::toROSMsg(*pcl_cloud, cloud);
+        cloud.header = scan.header;
     }
 
     // Parameter storage
@@ -99,7 +120,6 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr sub_;
     rclcpp::Publisher<sensor_msgs::msg::LaserScan>::SharedPtr pub_scan_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_cloud_;
-    std::shared_ptr<laser_geometry::LaserProjection> projector_;
 };
 
 int main(int argc, char * argv[])

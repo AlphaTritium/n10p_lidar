@@ -3,11 +3,45 @@ Panels:
     Name: Displays
 Visualization Manager:
   Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Enabled: true
+    
     - Class: rviz_default_plugins/LaserScan
-      Name: LaserScan
+      Name: Raw Scan
       Topic: /scan
+      Size (Pixels): 2
+      Style: Points
+      Color: 200; 200; 200
+      Alpha: 0.5
+      Enabled: true
+    
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Filtered Cloud
+      Topic: /cloud_processed
       Size (Pixels): 3
       Style: Points
-      Use Fixed Frame: laser_link
+      Color Transformer: Intensity
+      Enabled: true
+      Auto Size: false
+      Decay Time: 0
+    
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Detected Objects
+      Topic: /visualization_markers
+      Namespaces:
+        detected_objects: true
+      Enabled: true
+    
+    - Class: rviz_default_plugins/LaserScan
+      Name: Processed Scan
+      Topic: /scan_processed
+      Size (Pixels): 5
+      Style: Points
+      Color: 0; 255; 0
+      Enabled: true
+
   Global Options:
     Fixed Frame: laser_link
+    Background Color: 48; 48; 48
+    Frame Rate: 30
