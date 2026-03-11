@@ -40,6 +40,8 @@ ament_target_dependencies(lidar_pointcloud_processor
   nav_msgs
   visualization_msgs
   tf2_ros
+  std_msgs
+  geometry_msgs
 )
 
 target_link_libraries(lidar_pointcloud_processor

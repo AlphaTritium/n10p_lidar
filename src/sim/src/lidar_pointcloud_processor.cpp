@@ -1,6 +1,10 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <sensor_msgs/msg/laser_scan.hpp>
+#include <std_msgs/msg/float32.hpp>
+#include <std_msgs/msg/float32_multi_array.hpp>
+#include <geometry_msgs/msg/point_stamped.hpp>
+#include <visualization_msgs/msg/marker.hpp>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -17,6 +21,8 @@
 #include <visualization_msgs/msg/marker_array.hpp>
 #include <limits>
 #include <cmath>
+#include <sstream>
+#include <iomanip>
 
 class LidarProcessor : public rclcpp::Node
 {
@@ -67,14 +73,19 @@ public:
         if (detect_objects_) {
             objects_pub_ = this->create_publisher<lslidar_msgs::msg::DetectedObjects>("/detected_objects", 10);
             marker_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/object_markers", 10);
+            
+            // New: Distance publishers
+            nearest_distance_pub_ = this->create_publisher<std_msgs::msg::Float32>("/nearest_object_distance", 10);
+            all_distances_pub_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("/all_object_distances", 10);
+            object_positions_pub_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("/object_xy_positions", 10);
         }
 
         RCLCPP_INFO(this->get_logger(), "LidarProcessor started");
         RCLCPP_INFO(this->get_logger(), "  Input topic: %s", input_topic_.c_str());
         RCLCPP_INFO(this->get_logger(), "  Output scan topic: %s", output_scan_topic_.c_str());
         RCLCPP_INFO(this->get_logger(), "  Output cloud topic: %s", output_cloud_topic_.c_str());
+        RCLCPP_INFO(this->get_logger(), "  ✅ Publishing distances on /nearest_object_distance, /all_object_distances, /object_xy_positions");
     }
-
 private:
     pcl::PointCloud<pcl::PointXYZI>::Ptr filterCloud(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud)
     {
@@ -138,6 +149,9 @@ private:
         objects_msg.header = header;
 
         visualization_msgs::msg::MarkerArray markers;
+        
+        std::vector<float> distances;
+        std::vector<float> xy_positions;
 
         int obj_id = 0;
         for (const auto& indices : cluster_indices)
@@ -164,6 +178,10 @@ private:
                            static_cast<float>(cluster_max_size_) * 
                            std::exp(-distance / 5.0);
             
+            distances.push_back(static_cast<float>(distance));
+            xy_positions.push_back(centroid[0]);
+            xy_positions.push_back(centroid[1]);
+            
             double min_x = INFINITY, max_x = -INFINITY, min_y = INFINITY, max_y = -INFINITY;
             for (const auto& pt : cluster->points)
             {
@@ -177,25 +195,51 @@ private:
 
             objects_msg.objects.push_back(obj);
 
-            visualization_msgs::msg::Marker marker;
-            marker.header = header;
-            marker.ns = "detected_objects";
-            marker.id = obj_id;
-            marker.type = visualization_msgs::msg::Marker::SPHERE;
-            marker.action = visualization_msgs::msg::Marker::ADD;
-            marker.pose.position.x = centroid[0];
-            marker.pose.position.y = centroid[1];
-            marker.pose.position.z = centroid[2];
-            marker.pose.orientation.w = 1.0;
-            marker.scale.x = 0.3;
-            marker.scale.y = 0.3;
-            marker.scale.z = 0.3;
-            marker.color.r = 1.0;
-            marker.color.g = 0.0;
-            marker.color.b = 0.0;
-            marker.color.a = 0.8;
-            marker.lifetime = rclcpp::Duration::from_seconds(0.5);
-            markers.markers.push_back(marker);
+            // Sphere marker at object position (RED)
+            visualization_msgs::msg::Marker sphere_marker;
+            sphere_marker.header = header;
+            sphere_marker.ns = "detected_objects";
+            sphere_marker.id = obj_id * 2;
+            sphere_marker.type = visualization_msgs::msg::Marker::SPHERE;
+            sphere_marker.action = visualization_msgs::msg::Marker::ADD;
+            sphere_marker.pose.position.x = centroid[0];
+            sphere_marker.pose.position.y = centroid[1];
+            sphere_marker.pose.position.z = centroid[2];
+            sphere_marker.pose.orientation.w = 1.0;
+            sphere_marker.scale.x = 0.3;
+            sphere_marker.scale.y = 0.3;
+            sphere_marker.scale.z = 0.3;
+            sphere_marker.color.r = 1.0;
+            sphere_marker.color.g = 0.0;
+            sphere_marker.color.b = 0.0;
+            sphere_marker.color.a = 0.9;
+            sphere_marker.lifetime = rclcpp::Duration::from_seconds(1.0);
+            markers.markers.push_back(sphere_marker);
+            
+            // Text marker showing coordinates (WHITE TEXT ABOVE SPHERE)
+            visualization_msgs::msg::Marker text_marker;
+            text_marker.header = header;
+            text_marker.ns = "object_labels";
+            text_marker.id = obj_id * 2 + 1;
+            text_marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+            text_marker.action = visualization_msgs::msg::Marker::ADD;
+            text_marker.pose.position.x = centroid[0];
+            text_marker.pose.position.y = centroid[1];
+            text_marker.pose.position.z = centroid[2] + 0.4;
+            text_marker.pose.orientation.w = 1.0;
+            
+            std::ostringstream label_stream;
+            label_stream << std::fixed << std::setprecision(2);
+            label_stream << "#" << obj_id << " (" << centroid[0] << ", " << centroid[1] << ", " << centroid[2] << ")";
+            text_marker.text = label_stream.str();
+            
+            text_marker.scale.z = 0.15;
+            text_marker.color.r = 1.0;
+            text_marker.color.g = 1.0;
+            text_marker.color.b = 1.0;
+            text_marker.color.a = 1.0;
+            text_marker.lifetime = rclcpp::Duration::from_seconds(1.0);
+            markers.markers.push_back(text_marker);
 
             obj_id++;
         }
@@ -203,9 +247,26 @@ private:
         if (!objects_msg.objects.empty()) {
             objects_pub_->publish(objects_msg);
             marker_pub_->publish(markers);
+            
+            // Publish nearest object distance
+            float min_distance = *std::min_element(distances.begin(), distances.end());
+            std_msgs::msg::Float32 nearest_msg;
+            nearest_msg.data = min_distance;
+            nearest_distance_pub_->publish(nearest_msg);
+            
+            // Publish all distances
+            std_msgs::msg::Float32MultiArray distances_msg;
+            distances_msg.data = distances;
+            all_distances_pub_->publish(distances_msg);
+            
+            // Publish XY positions
+            std_msgs::msg::Float32MultiArray positions_msg;
+            positions_msg.data = xy_positions;
+            object_positions_pub_->publish(positions_msg);
 
             RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
-                                "✅ Detected %zu objects", objects_msg.objects.size());
+                                "✅ Detected %zu objects | Nearest: %.2fm", 
+                                objects_msg.objects.size(), min_distance);
         }
     }
 
@@ -309,6 +370,11 @@ private:
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr cloud_pub_;
     rclcpp::Publisher<lslidar_msgs::msg::DetectedObjects>::SharedPtr objects_pub_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
+    rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr centroid_pub_;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr bbox_pub_;
+    rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr nearest_distance_pub_;
+    rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr all_distances_pub_;
+    rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr object_positions_pub_;
 };
 
 int main(int argc, char * argv[])

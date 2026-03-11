@@ -73,30 +73,45 @@ def generate_launch_description():
         launch_arguments={'use_sim_time': LaunchConfiguration('use_sim_time')}.items()
     )
 
-    # Processor node
+    # Point Cloud Processor - Pure PCL processing
     pointcloud_processor_node = Node(
         package='sim',
         executable='lidar_pointcloud_processor',
         name='lidar_pointcloud_processor',
         output='screen',
         parameters=[{
-            'input_topic': '/lslidar_point_cloud',  # From driver
+            'input_topic': '/lslidar_point_cloud',
             'output_scan_topic': '/scan_processed',
             'output_cloud_topic': '/cloud_processed',
             'range_min': 0.15,
             'range_max': 12.0,
-            'z_min': -0.5,
+            'z_min': -1.0,
             'z_max': 2.0,
-            'voxel_leaf_size': 0.05,
-            'cluster_min_size': 5,
-            'cluster_max_size': 1000,
-            'cluster_tolerance': 0.2,
+            'voxel_leaf_size': 0.02,
+            'cluster_min_size': 8,
+            'cluster_max_size': 500,
+            'cluster_tolerance': 0.1,
             'publish_filtered_cloud': True,
             'detect_objects': True,
-            'classify_surfaces': True,
-            'use_sim_time': LaunchConfiguration('use_sim_time')
+            'classify_surfaces': False,
         }]
-    )
+    ),
+    
+    # LiDAR Diagnostic & Performance Monitor
+    diagnostic_node = Node(
+        package='sim',
+        executable='lidar_diagnostic',
+        name='lidar_diagnostic',
+        output='screen',
+        pointcloud_processor_nodearameters=[{
+            'scan_topic': '/scan',
+            'cloud_topic': '/lslidar_point_cloud',
+            'objects_topic': '/detected_objects',
+            'min_range': 0.0,
+            'max_range': 12.0,
+            'expected_beams': 180,
+        }]
+    ),
 
     # Detector node (uses processed scan)
     detector_node = Node(
@@ -143,6 +158,15 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration('start_rviz'))
     )
 
+    # Static transform publisher: base_link -> laser_link
+    static_tf_pub = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='static_tf_pub',
+        arguments=['0', '0', '0.1', '0', '0', '0', 'base_link', 'laser_link'],
+        output='screen'
+    )
+
     return LaunchDescription([
         use_sim_time_arg,
         use_simulation_arg,
@@ -157,4 +181,6 @@ def generate_launch_description():
         detector_node,
         slam_node,
         rviz_node,
+        static_tf_pub,
+        diagnostic_node
     ])
