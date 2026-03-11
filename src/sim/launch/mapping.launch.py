@@ -103,7 +103,7 @@ def generate_launch_description():
         executable='lidar_diagnostic',
         name='lidar_diagnostic',
         output='screen',
-        pointcloud_processor_nodearameters=[{
+        parameters=[{
             'scan_topic': '/scan',
             'cloud_topic': '/lslidar_point_cloud',
             'objects_topic': '/detected_objects',
@@ -114,6 +114,7 @@ def generate_launch_description():
     ),
 
     # Detector node (uses processed scan)
+    '''
     detector_node = Node(
         package='sim',
         executable='lidar_app_node',
@@ -127,6 +128,8 @@ def generate_launch_description():
             'use_sim_time': LaunchConfiguration('use_sim_time')
         }]
     )
+    '''
+    
 
     # SLAM Toolbox
     slam_node = Node(
@@ -178,7 +181,6 @@ def generate_launch_description():
         real_driver_launch,
         sim_launch,
         pointcloud_processor_node,
-        detector_node,
         slam_node,
         rviz_node,
         static_tf_pub,

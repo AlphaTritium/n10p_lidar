@@ -131,6 +131,7 @@ def generate_launch_description():
         }]
     )
 
+    '''
     # Application node
     app_node = Node(
         package='sim',
@@ -142,6 +143,7 @@ def generate_launch_description():
             'use_sim_time': LaunchConfiguration('use_sim_time')
         }]
     )
+    '''
 
     # RViz
     rviz_node = Node(

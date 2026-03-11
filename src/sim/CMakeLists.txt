@@ -18,18 +18,18 @@ find_package(visualization_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common io filters segmentation kdtree search surface)
 
-add_executable(lidar_app_node src/lidar_app_node.cpp)
-ament_target_dependencies(lidar_app_node
-  rclcpp
-  sensor_msgs
-  laser_geometry
-  pcl_conversions
-  lslidar_msgs
-)
+#add_executable(lidar_app_node src/lidar_app_node.cpp)
+#ament_target_dependencies(lidar_app_node
+#  rclcpp
+#  sensor_msgs
+#  laser_geometry
+#  pcl_conversions
+#  lslidar_msgs
+#)
 
-target_link_libraries(lidar_app_node
-  ${PCL_LIBRARIES}
-)
+#target_link_libraries(lidar_app_node
+#  ${PCL_LIBRARIES}
+#)
 
 add_executable(lidar_pointcloud_processor src/lidar_pointcloud_processor.cpp)
 ament_target_dependencies(lidar_pointcloud_processor
@@ -48,11 +48,11 @@ target_link_libraries(lidar_pointcloud_processor
   ${PCL_LIBRARIES}
 )
 
-install(TARGETS
-  lidar_app_node
-  lidar_pointcloud_processor
-  DESTINATION lib/${PROJECT_NAME}
-)
+#install(TARGETS
+#  lidar_app_node
+#  lidar_pointcloud_processor
+#  DESTINATION lib/${PROJECT_NAME}
+#)
 
 install(
   DIRECTORY launch config urdf

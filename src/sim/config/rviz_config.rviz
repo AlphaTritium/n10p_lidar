@@ -1,4 +1,3 @@
-NEW_FILE_CODE
 Panels:
   - Class: rviz_common/Displays
     Help Height: 78
@@ -7,17 +6,15 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
-        - /LiDAR Point Cloud1
-        - /Detected Objects1
       Splitter Ratio: 0.5
-    Tree Height: 549
+    Tree Height: 571
 Visualization Manager:
   Class: ""
   Displays:
-    - Alpha: 0.3
+    - Alpha: 0.5
       Cell Size: 1
       Class: rviz_default_plugins/Grid
-      Color: 100; 100; 100
+      Color: 160; 160; 164
       Enabled: true
       Line Style:
         Line Width: 0.029999999329447746
@@ -29,11 +26,44 @@ Visualization Manager:
         Y: 0
         Z: 0
       Plane: XY
-      Plane Cell Count: 20
+      Plane Cell Count: 10
       Reference Frame: <Fixed Frame>
       Value: true
-    
-    - Alpha: 0.6
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/LaserScan
+      Color: 255; 0; 0
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: Raw Scan
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.009999999776482582
+      Style: Points
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /scan_processed
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
         Max Value: 10
@@ -43,58 +73,74 @@ Visualization Manager:
       Channel Name: intensity
       Class: rviz_default_plugins/PointCloud2
       Color: 0; 255; 0
-      Color Transformer: Intensity
+      Color Transformer: FlatColor
       Decay Time: 0
       Enabled: true
       Invert Rainbow: false
-      Max Color: 0; 255; 0
-      Min Color: 0; 100; 0
-      Name: LiDAR Point Cloud
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: Filtered Cloud
       Position Transformer: XYZ
       Selectable: true
-      Size (Pixels): 3
-      Style: Points
+      Size (Pixels): 4
+      Size (m): 0.009999999776482582
+      Style: Boxes
       Topic:
         Depth: 5
         Durability Policy: Volatile
+        Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /cloud_processed
       Use Fixed Frame: true
-      Use rainbow: false
+      Use rainbow: true
       Value: true
-    
     - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
       Name: Detected Objects
       Namespaces:
-        detected_objects: true
-        object_labels: true
+        {}
       Topic:
         Depth: 5
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /object_markers
+        Value: /visualization_markers
       Value: true
-    
     - Alpha: 1
-      Class: rviz_default_plugins/Axes
+      Class: rviz_default_plugins/PointStamped
+      Color: 255; 255; 0
       Enabled: true
-      Length: 0.5
-      Name: LiDAR Origin (laser_link)
-      Radius: 0.05
-      Reference Frame: laser_link
+      History Length: 1
+      Name: Object Centroids
+      Radius: 0.15000000596046448
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /detected_objects_centroid
       Value: true
-    
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Bounding Boxes
+      Namespaces:
+        {}
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /bounding_boxes
+      Value: true
     - Class: rviz_default_plugins/TF
       Enabled: true
       Frame Timeout: 15
       Frames:
-        All Enabled: false
-        base_link:
-          Value: true
-        laser_link:
-          Value: true
+        All Enabled: true
       Marker Scale: 0.5
       Name: TF
       Show Arrows: true
@@ -104,18 +150,24 @@ Visualization Manager:
         {}
       Update Interval: 0
       Value: true
-  
   Enabled: true
   Global Options:
-    Background Color: 20; 20; 30
+    Background Color: 48; 48; 48
     Fixed Frame: laser_link
     Frame Rate: 30
   Name: root
   Tools:
     - Class: rviz_default_plugins/Interact
-      Mode: Move
+      Hide Inactive Objects: true
     - Class: rviz_default_plugins/Measure
+      Line color: 128; 128; 0
     - Class: rviz_default_plugins/SetGoal
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: goal_pose
   Transformation:
     Current:
       Class: rviz_default_plugins/TF
@@ -123,7 +175,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 8
+      Distance: 4.260418891906738
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -138,15 +190,18 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.4
+      Pitch: 0.5850001573562622
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 0.785398
+      Yaw: 1.775397777557373
     Saved: ~
 Window Geometry:
   Displays:
     collapsed: false
-  Height: 900
-  Width: 1600
-  X: 50
-  Y: 50
+  Height: 800
+  Hide Left Dock: false
+  Hide Right Dock: false
+  QMainWindow State: 000000ff00000000fd000000010000000000000156000002c6fc0200000001fb000000100044006900730070006c006100790073010000003d000002c6000000c900ffffff00000354000002c600000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  Width: 1200
+  X: 100
+  Y: 100

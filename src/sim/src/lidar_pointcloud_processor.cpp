@@ -3,6 +3,7 @@
 #include <sensor_msgs/msg/laser_scan.hpp>
 #include <std_msgs/msg/float32.hpp>
 #include <std_msgs/msg/float32_multi_array.hpp>
+#include <std_msgs/msg/bool.hpp>
 #include <geometry_msgs/msg/point_stamped.hpp>
 #include <visualization_msgs/msg/marker.hpp>
 #include <pcl_conversions/pcl_conversions.h>
@@ -23,13 +24,13 @@
 #include <cmath>
 #include <sstream>
 #include <iomanip>
+#include <mutex>
 
 class LidarProcessor : public rclcpp::Node
 {
 public:
-    LidarProcessor() : Node("lidar_processor")
+    LidarProcessor() : Node("lidar_processor"), system_enabled_(true), processing_active_(false)
     {
-        // ---- Declare and retrieve parameters ----
         this->declare_parameter<std::string>("input_topic", "/lslidar_point_cloud");
         this->declare_parameter<std::string>("output_scan_topic", "/scan_processed");
         this->declare_parameter<std::string>("output_cloud_topic", "/cloud_processed");
@@ -44,6 +45,7 @@ public:
         this->declare_parameter<bool>("publish_filtered_cloud", true);
         this->declare_parameter<bool>("detect_objects", true);
         this->declare_parameter<bool>("classify_surfaces", false);
+        this->declare_parameter<bool>("system_enabled", true);
 
         input_topic_ = this->get_parameter("input_topic").as_string();
         output_scan_topic_ = this->get_parameter("output_scan_topic").as_string();
@@ -59,8 +61,8 @@ public:
         publish_filtered_cloud_ = this->get_parameter("publish_filtered_cloud").as_bool();
         detect_objects_ = this->get_parameter("detect_objects").as_bool();
         classify_surfaces_ = this->get_parameter("classify_surfaces").as_bool();
+        system_enabled_ = this->get_parameter("system_enabled").as_bool();
 
-        // Create subscribers and publishers
         cloud_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
             input_topic_, 10, std::bind(&LidarProcessor::cloudCallback, this, std::placeholders::_1));
 
@@ -73,32 +75,60 @@ public:
         if (detect_objects_) {
             objects_pub_ = this->create_publisher<lslidar_msgs::msg::DetectedObjects>("/detected_objects", 10);
             marker_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/object_markers", 10);
-            
-            // New: Distance publishers
             nearest_distance_pub_ = this->create_publisher<std_msgs::msg::Float32>("/nearest_object_distance", 10);
             all_distances_pub_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("/all_object_distances", 10);
             object_positions_pub_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("/object_xy_positions", 10);
         }
 
+        enable_sub_ = this->create_subscription<std_msgs::msg::Bool>(
+            "/lidar_processor/enable", 10, std::bind(&LidarProcessor::enableCallback, this, std::placeholders::_1));
+
+        status_pub_ = this->create_publisher<std_msgs::msg::Bool>("/lidar_processor/status", 10);
+
+        status_timer_ = this->create_wall_timer(
+            std::chrono::seconds(1),
+            std::bind(&LidarProcessor::publishStatus, this));
+
         RCLCPP_INFO(this->get_logger(), "LidarProcessor started");
+        RCLCPP_INFO(this->get_logger(), "  System enabled: %s", system_enabled_ ? "ON" : "OFF");
         RCLCPP_INFO(this->get_logger(), "  Input topic: %s", input_topic_.c_str());
         RCLCPP_INFO(this->get_logger(), "  Output scan topic: %s", output_scan_topic_.c_str());
         RCLCPP_INFO(this->get_logger(), "  Output cloud topic: %s", output_cloud_topic_.c_str());
         RCLCPP_INFO(this->get_logger(), "  ✅ Publishing distances on /nearest_object_distance, /all_object_distances, /object_xy_positions");
+        RCLCPP_INFO(this->get_logger(), "  💡 Control: Publish to /lidar_processor/enable (true/false) to toggle processing");
     }
+
 private:
+    void enableCallback(const std_msgs::msg::Bool::SharedPtr msg)
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        bool previous_state = system_enabled_;
+        system_enabled_ = msg->data;
+        
+        if (system_enabled_ && !previous_state) {
+            RCLCPP_INFO(this->get_logger(), "✅ System ENABLED - Processing resumed");
+        } else if (!system_enabled_ && previous_state) {
+            RCLCPP_INFO(this->get_logger(), "⏸️ System DISABLED - Saving resources");
+        }
+    }
+
+    void publishStatus()
+    {
+        std_msgs::msg::Bool status_msg;
+        status_msg.data = system_enabled_;
+        status_pub_->publish(status_msg);
+    }
+
     pcl::PointCloud<pcl::PointXYZI>::Ptr filterCloud(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud)
     {
         pcl::PointCloud<pcl::PointXYZI>::Ptr filtered_cloud(new pcl::PointCloud<pcl::PointXYZI>);
 
-        // PassThrough filter for Z-axis (height filtering)
         pcl::PassThrough<pcl::PointXYZI> pass;
         pass.setInputCloud(cloud);
         pass.setFilterFieldName("z");
         pass.setFilterLimits(z_min_, z_max_);
         pass.filter(*filtered_cloud);
 
-        // Voxel Grid filter for downsampling
         pcl::VoxelGrid<pcl::PointXYZI> sor;
         sor.setInputCloud(filtered_cloud);
         sor.setLeafSize(voxel_leaf_size_, voxel_leaf_size_, voxel_leaf_size_);
@@ -109,7 +139,6 @@ private:
 
     void classifySurfaces(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud)
     {
-        // Simple ground segmentation using RANSAC
         pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
         pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
         pcl::SACSegmentation<pcl::PointXYZI> seg;
@@ -195,7 +224,6 @@ private:
 
             objects_msg.objects.push_back(obj);
 
-            // Sphere marker at object position (RED)
             visualization_msgs::msg::Marker sphere_marker;
             sphere_marker.header = header;
             sphere_marker.ns = "detected_objects";
@@ -216,7 +244,6 @@ private:
             sphere_marker.lifetime = rclcpp::Duration::from_seconds(1.0);
             markers.markers.push_back(sphere_marker);
             
-            // Text marker showing coordinates (WHITE TEXT ABOVE SPHERE)
             visualization_msgs::msg::Marker text_marker;
             text_marker.header = header;
             text_marker.ns = "object_labels";
@@ -248,18 +275,15 @@ private:
             objects_pub_->publish(objects_msg);
             marker_pub_->publish(markers);
             
-            // Publish nearest object distance
             float min_distance = *std::min_element(distances.begin(), distances.end());
             std_msgs::msg::Float32 nearest_msg;
             nearest_msg.data = min_distance;
             nearest_distance_pub_->publish(nearest_msg);
             
-            // Publish all distances
             std_msgs::msg::Float32MultiArray distances_msg;
             distances_msg.data = distances;
             all_distances_pub_->publish(distances_msg);
             
-            // Publish XY positions
             std_msgs::msg::Float32MultiArray positions_msg;
             positions_msg.data = xy_positions;
             object_positions_pub_->publish(positions_msg);
@@ -305,6 +329,10 @@ private:
 
     void cloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr cloud_msg)
     {
+        if (!system_enabled_) {
+            return;
+        }
+
         pcl::PointCloud<pcl::PointXYZI>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZI>);
         pcl::fromROSMsg(*cloud_msg, *cloud);
 
@@ -348,7 +376,6 @@ private:
         convertToLaserScan(filtered_cloud, cloud_msg->header);
     }
 
-    // Parameter storage
     std::string input_topic_;
     std::string output_scan_topic_;
     std::string output_cloud_topic_;
@@ -363,8 +390,10 @@ private:
     bool publish_filtered_cloud_;
     bool detect_objects_;
     bool classify_surfaces_;
+    bool system_enabled_;
+    bool processing_active_;
+    std::mutex mutex_;
 
-    // ROS 2 handles
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr cloud_sub_;
     rclcpp::Publisher<sensor_msgs::msg::LaserScan>::SharedPtr scan_pub_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr cloud_pub_;
@@ -375,6 +404,9 @@ private:
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr nearest_distance_pub_;
     rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr all_distances_pub_;
     rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr object_positions_pub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr enable_sub_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr status_pub_;
+    rclcpp::TimerBase::SharedPtr status_timer_;
 };
 
 int main(int argc, char * argv[])
