@@ -3,7 +3,6 @@
 #include <sensor_msgs/msg/laser_scan.hpp>
 #include <std_msgs/msg/float32.hpp>
 #include <std_msgs/msg/float32_multi_array.hpp>
-#include <std_msgs/msg/bool.hpp>
 #include <geometry_msgs/msg/point_stamped.hpp>
 #include <visualization_msgs/msg/marker.hpp>
 #include <nav_msgs/msg/odometry.hpp>
@@ -14,163 +13,114 @@
 #include <pcl/filters/passthrough.h>
 #include <pcl/filters/statistical_outlier_removal.h>
 #include <pcl/filters/radius_outlier_removal.h>
-#include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/segmentation/extract_clusters.h>
-#include <pcl/sample_consensus/method_types.h>
-#include <pcl/sample_consensus/model_types.h>
 #include <pcl/kdtree/kdtree.h>
 #include <pcl/common/centroid.h>
-#include <pcl/common/common.h>
 #include <lslidar_msgs/msg/detected_objects.hpp>
 #include <lslidar_msgs/msg/detected_object.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
-#include <Eigen/Dense>
 
 #include <limits>
 #include <cmath>
-#include <sstream>
-#include <iomanip>
 #include <mutex>
 #include <deque>
 #include <memory>
+#include <algorithm>
+#include <map>
+#include <set>
 
-// -------------------------------------------------------------------
-// Simple 2D constant velocity Kalman filter for tracking
-// -------------------------------------------------------------------
-class KalmanFilter2D
-{
-public:
-    KalmanFilter2D()
-    {
-        // State: [x, y, vx, vy]
-        x_ = Eigen::VectorXd::Zero(4);
-        P_ = Eigen::MatrixXd::Identity(4, 4) * 0.1;
-        F_ = Eigen::MatrixXd::Identity(4, 4);
-        F_(0, 2) = 1.0;
-        F_(1, 3) = 1.0;
-        H_ = Eigen::MatrixXd::Zero(2, 4);
-        H_(0, 0) = 1.0;
-        H_(1, 1) = 1.0;
-        R_ = Eigen::MatrixXd::Identity(2, 2) * 0.05;
-        Q_ = Eigen::MatrixXd::Identity(4, 4) * 0.01;
-    }
-
-    void predict(double dt)
-    {
-        F_(0, 2) = dt;
-        F_(1, 3) = dt;
-        x_ = F_ * x_;
-        P_ = F_ * P_ * F_.transpose() + Q_;
-    }
-
-    void update(double mx, double my)
-    {
-        Eigen::Vector2d z(mx, my);
-        Eigen::Vector2d y = z - H_ * x_;
-        Eigen::MatrixXd S = H_ * P_ * H_.transpose() + R_;
-        Eigen::MatrixXd K = P_ * H_.transpose() * S.inverse();
-        x_ = x_ + K * y;
-        P_ = (Eigen::MatrixXd::Identity(4, 4) - K * H_) * P_;
-    }
-
-    Eigen::VectorXd getState() const { return x_; }
-    double getX() const { return x_(0); }
-    double getY() const { return x_(1); }
-    double getVx() const { return x_(2); }
-    double getVy() const { return x_(3); }
-
-private:
-    Eigen::VectorXd x_;
-    Eigen::MatrixXd P_, F_, H_, R_, Q_;
-};
-
-// -------------------------------------------------------------------
-// Track structure
-// -------------------------------------------------------------------
-struct Track
+struct PoleCandidate
 {
     int id;
-    KalmanFilter2D kf;
-    rclcpp::Time last_update;
-    int age;
+    double x, y, z;
+    double radius;
+    int points_count;
+    rclcpp::Time first_seen;
+    rclcpp::Time last_seen;
+    int detection_count;
+    std::vector<double> neighbor_distances;
+    
+    PoleCandidate(int id_, double x_, double y_, double z_, double r_, int pts, rclcpp::Time stamp)
+        : id(id_), x(x_), y(y_), z(z_), radius(r_), points_count(pts), 
+          first_seen(stamp), last_seen(stamp), detection_count(1) {}
+};
+
+class TrackedPole
+{
+public:
+    int id;
+    double world_x, world_y;
+    double avg_radius;
+    int total_detections;
+    rclcpp::Time first_seen;
+    rclcpp::Time last_seen;
     int invisible_count;
-    double diameter;
-    double circularity;
-    double confidence;
-
-    Track(int id_, double x, double y, double diam, double circ, double conf, rclcpp::Time stamp)
-        : id(id_), last_update(stamp), age(1), invisible_count(0),
-          diameter(diam), circularity(circ), confidence(conf)
+    bool is_confirmed;
+    
+    TrackedPole(int id_, double wx, double wy, double r, rclcpp::Time stamp)
+        : id(id_), world_x(wx), world_y(wy), avg_radius(r), total_detections(1),
+          first_seen(stamp), last_seen(stamp), invisible_count(0), is_confirmed(false) {}
+    
+    void update(double wx, double wy, double r, rclcpp::Time stamp)
     {
-        kf.update(x, y);
-    }
-
-    void predict(rclcpp::Time current_time)
-    {
-        double dt = (current_time - last_update).seconds();
-        if (dt > 0.0) {
-            kf.predict(dt);
-        }
-    }
-
-    void update(double x, double y, double diam, double circ, double conf, rclcpp::Time stamp)
-    {
-        kf.update(x, y);
-        last_update = stamp;
-        age++;
+        world_x = 0.8 * world_x + 0.2 * wx;
+        world_y = 0.8 * world_y + 0.2 * wy;
+        avg_radius = 0.9 * avg_radius + 0.1 * r;
+        last_seen = stamp;
+        total_detections++;
         invisible_count = 0;
-        diameter = 0.9 * diameter + 0.1 * diam;
-        circularity = 0.9 * circularity + 0.1 * circ;
-        confidence = 0.9 * confidence + 0.1 * conf;
+        if (total_detections >= 5) is_confirmed = true;
     }
-
+    
     void markInvisible()
     {
         invisible_count++;
     }
-
-    bool isStale(int max_invisible = 5) const
+    
+    bool isStale(int max_invisible = 20) const
     {
         return invisible_count > max_invisible;
     }
 };
 
-// -------------------------------------------------------------------
-// Main Node
-// -------------------------------------------------------------------
 class LidarProcessor : public rclcpp::Node
 {
 public:
-    LidarProcessor() : Node("lidar_processor"), system_enabled_(true), processing_active_(false),
-                       next_track_id_(0)
+    LidarProcessor()
+        : Node("lidar_processor"),
+          max_poles_(6),
+          association_distance_(0.15),
+          max_invisible_frames_(20),
+          next_pole_id_(0)
     {
-        // Declare parameters
         this->declare_parameter<std::string>("input_topic", "/lslidar_point_cloud");
-        this->declare_parameter<std::string>("output_scan_topic", "/scan_processed");
         this->declare_parameter<std::string>("output_cloud_topic", "/cloud_processed");
-        this->declare_parameter<double>("range_min", 0.15);
-        this->declare_parameter<double>("range_max", 12.0);
-        this->declare_parameter<double>("z_min", -1.0);
-        this->declare_parameter<double>("z_max", 2.0);
-        this->declare_parameter<double>("voxel_leaf_size", 0.005);
-        this->declare_parameter<int>("cluster_min_size", 10);
-        this->declare_parameter<int>("cluster_max_size", 500);
-        this->declare_parameter<double>("cluster_tolerance", 0.2);
+        this->declare_parameter<double>("range_min", 0.2);
+        this->declare_parameter<double>("range_max", 5.0);
+        this->declare_parameter<double>("z_min", -0.3);
+        this->declare_parameter<double>("z_max", 0.3);
+        this->declare_parameter<double>("voxel_leaf_size", 0.02);
+        this->declare_parameter<int>("cluster_min_size", 8);
+        this->declare_parameter<int>("cluster_max_size", 150);
+        this->declare_parameter<double>("cluster_tolerance", 0.05);
         this->declare_parameter<bool>("publish_filtered_cloud", true);
         this->declare_parameter<bool>("detect_objects", true);
-        this->declare_parameter<bool>("classify_surfaces", false);
-        this->declare_parameter<bool>("system_enabled", true);
-        this->declare_parameter<bool>("enable_circle_detection", false);
-        this->declare_parameter<double>("expected_object_diameter", 0.025);
-        this->declare_parameter<double>("detection_tolerance", 0.005);
-        this->declare_parameter<int>("accumulated_scans", 1);
+        
+        this->declare_parameter<double>("pole_expected_radius", 0.0125);
+        this->declare_parameter<double>("pole_radius_tolerance", 0.008);
+        this->declare_parameter<double>("pole_min_distance", 0.1);
+        this->declare_parameter<double>("pole_max_distance", 3.0);
+        this->declare_parameter<std::vector<double>>("expected_inter_pole_distances", std::vector<double>{0.185, 0.100});
+        this->declare_parameter<double>("distance_match_tolerance", 0.03);
+        this->declare_parameter<bool>("enable_pattern_matching", true);
+        this->declare_parameter<bool>("publish_distance_matrix", true);
+        
+        this->declare_parameter<int>("max_poles", 6);
+        this->declare_parameter<double>("association_distance", 0.15);
+        this->declare_parameter<int>("max_invisible_frames", 20);
         this->declare_parameter<bool>("enable_tracking", true);
-        this->declare_parameter<double>("track_max_association_distance", 0.2);
-        this->declare_parameter<int>("track_max_invisible", 5);
 
-        // Get parameters
         input_topic_ = this->get_parameter("input_topic").as_string();
-        output_scan_topic_ = this->get_parameter("output_scan_topic").as_string();
         output_cloud_topic_ = this->get_parameter("output_cloud_topic").as_string();
         range_min_ = this->get_parameter("range_min").as_double();
         range_max_ = this->get_parameter("range_max").as_double();
@@ -182,426 +132,473 @@ public:
         cluster_tolerance_ = this->get_parameter("cluster_tolerance").as_double();
         publish_filtered_cloud_ = this->get_parameter("publish_filtered_cloud").as_bool();
         detect_objects_ = this->get_parameter("detect_objects").as_bool();
-        classify_surfaces_ = this->get_parameter("classify_surfaces").as_bool();
-        system_enabled_ = this->get_parameter("system_enabled").as_bool();
-        enable_circle_detection_ = this->get_parameter("enable_circle_detection").as_bool();
-        expected_diameter_ = this->get_parameter("expected_object_diameter").as_double();
-        detection_tolerance_ = this->get_parameter("detection_tolerance").as_double();
-        num_accumulated_scans_ = this->get_parameter("accumulated_scans").as_int();
+        
+        pole_expected_radius_ = this->get_parameter("pole_expected_radius").as_double();
+        pole_radius_tolerance_ = this->get_parameter("pole_radius_tolerance").as_double();
+        pole_min_distance_ = this->get_parameter("pole_min_distance").as_double();
+        pole_max_distance_ = this->get_parameter("pole_max_distance").as_double();
+        expected_distances_ = this->get_parameter("expected_inter_pole_distances").as_double_array();
+        distance_match_tol_ = this->get_parameter("distance_match_tolerance").as_double();
+        enable_pattern_matching_ = this->get_parameter("enable_pattern_matching").as_bool();
+        publish_distance_matrix_ = this->get_parameter("publish_distance_matrix").as_bool();
+        
+        max_poles_ = this->get_parameter("max_poles").as_int();
+        association_distance_ = this->get_parameter("association_distance").as_double();
+        max_invisible_frames_ = this->get_parameter("max_invisible_frames").as_int();
         enable_tracking_ = this->get_parameter("enable_tracking").as_bool();
-        track_max_association_dist_ = this->get_parameter("track_max_association_distance").as_double();
-        track_max_invisible_ = this->get_parameter("track_max_invisible").as_int();
 
-        // Subscribers
         cloud_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
             input_topic_, 10, std::bind(&LidarProcessor::cloudCallback, this, std::placeholders::_1));
+        
+        odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
+            "/odom", 10, std::bind(&LidarProcessor::odomCallback, this, std::placeholders::_1));
 
-        // Publishers
-        scan_pub_ = this->create_publisher<sensor_msgs::msg::LaserScan>(output_scan_topic_, 10);
         cloud_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(output_cloud_topic_, 10);
         objects_pub_ = this->create_publisher<lslidar_msgs::msg::DetectedObjects>("/detected_objects", 10);
-        markers_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/object_markers", 10);
-        tracked_objects_pub_ = this->create_publisher<lslidar_msgs::msg::DetectedObjects>("/tracked_objects", 10);
+        poles_pub_ = this->create_publisher<lslidar_msgs::msg::DetectedObjects>("/detected_poles", 10);
+        distance_matrix_pub_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("/pole_distance_matrix", 10);
+        pole_distances_pub_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("/inter_pole_distances", 10);
+        marker_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/pole_markers", 10);
+        
+        // tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
+        // tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
-        RCLCPP_INFO(this->get_logger(), "LiDAR processor initialized");
-        RCLCPP_INFO(this->get_logger(), "Circle detection: %s", enable_circle_detection_ ? "ENABLED" : "DISABLED");
-        if (enable_circle_detection_) {
-            RCLCPP_INFO(this->get_logger(), "Expected diameter: %.3f m (±%.3f)", 
-                       expected_diameter_, detection_tolerance_);
-            RCLCPP_INFO(this->get_logger(), "Accumulating %d scans for higher resolution", 
-                       num_accumulated_scans_);
-        }
+        RCLCPP_INFO(this->get_logger(), "LiDAR Pole Detector initialized");
+        RCLCPP_INFO(this->get_logger(), "Expected pole radius: %.3f m (+/-%.3f)", pole_expected_radius_, pole_radius_tolerance_);
+        RCLCPP_INFO(this->get_logger(), "Max poles to track: %d", max_poles_);
         RCLCPP_INFO(this->get_logger(), "Tracking: %s", enable_tracking_ ? "ENABLED" : "DISABLED");
+        RCLCPP_INFO(this->get_logger(), "Expected inter-pole distances: ");
+        for (const auto& d : expected_distances_) {
+            RCLCPP_INFO(this->get_logger(), "  %.3f m (+/-%.3f)", d, distance_match_tol_);
+        }
     }
 
 private:
-    struct ShapeFitResult {
-        bool valid;
-        double center_x, center_y, radius;
-        double rmse;
-        int points_used;
-        double circularity;
-        double aspect_ratio;
-    };
-
-    // Enhanced filtering
-    void applyEnhancedFilters(pcl::PointCloud<pcl::PointXYZI>::Ptr input,
-                              pcl::PointCloud<pcl::PointXYZI>::Ptr output)
+    void cloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
     {
-        pcl::PassThrough<pcl::PointXYZI> pass;
+        if (!msg || msg->width == 0 || msg->data.empty()) return;
+
+        pcl::PointCloud<pcl::PointXYZ>::Ptr input_cloud(new pcl::PointCloud<pcl::PointXYZ>);
+        convertPointCloud(msg, input_cloud);
+
+        if (input_cloud->empty()) return;
+
+        pcl::PointCloud<pcl::PointXYZ>::Ptr filtered_cloud(new pcl::PointCloud<pcl::PointXYZ>);
+        applyFilters(input_cloud, filtered_cloud);
+
+        if (filtered_cloud->empty()) return;
+
+        if (publish_filtered_cloud_) {
+            sensor_msgs::msg::PointCloud2 cloud_msg;
+            pcl::PCLPointCloud2 pcl_pc2;
+            pcl::toPCLPointCloud2(*filtered_cloud, pcl_pc2);
+            pcl_conversions::fromPCL(pcl_pc2, cloud_msg);
+            cloud_msg.header = msg->header;
+            cloud_msg.header.frame_id = "laser_link";
+            cloud_pub_->publish(cloud_msg);
+        }
+
+        if (detect_objects_) {
+            processAndDetect(filtered_cloud, msg->header);
+        }
+    }
+    
+    void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
+    {
+        latest_odom_ = *msg;
+        has_odom_ = true;
+    }
+
+    void convertPointCloud(const sensor_msgs::msg::PointCloud2::SharedPtr& msg,
+                           pcl::PointCloud<pcl::PointXYZ>::Ptr output)
+    {
+        output->header.frame_id = msg->header.frame_id;
+        output->width = msg->width;
+        output->height = msg->height;
+        output->is_dense = msg->is_dense;
+        output->points.resize(msg->width * msg->height);
+
+        int x_offset = -1, y_offset = -1, z_offset = -1;
+        for (size_t i = 0; i < msg->fields.size(); ++i) {
+            const auto& field = msg->fields[i];
+            if (field.name == "x") x_offset = field.offset;
+            else if (field.name == "y") y_offset = field.offset;
+            else if (field.name == "z") z_offset = field.offset;
+        }
+
+        if (x_offset < 0 || y_offset < 0 || z_offset < 0) {
+            output->clear();
+            return;
+        }
+
+        const uint8_t* data = msg->data.data();
+        for (uint32_t i = 0; i < msg->width * msg->height; ++i) {
+            const uint8_t* point_data = data + i * msg->point_step;
+            output->points[i].x = *reinterpret_cast<const float*>(point_data + x_offset);
+            output->points[i].y = *reinterpret_cast<const float*>(point_data + y_offset);
+            output->points[i].z = *reinterpret_cast<const float*>(point_data + z_offset);
+        }
+    }
+
+    void applyFilters(pcl::PointCloud<pcl::PointXYZ>::Ptr input,
+                      pcl::PointCloud<pcl::PointXYZ>::Ptr output)
+    {
+        pcl::PassThrough<pcl::PointXYZ> pass;
         pass.setInputCloud(input);
         pass.setFilterFieldName("z");
         pass.setFilterLimits(z_min_, z_max_);
         pass.filter(*output);
 
-        pcl::StatisticalOutlierRemoval<pcl::PointXYZI> sor;
+        if (output->empty()) return;
+
+        pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor;
         sor.setInputCloud(output);
         sor.setMeanK(8);
         sor.setStddevMulThresh(1.0);
         sor.filter(*output);
 
-        pcl::RadiusOutlierRemoval<pcl::PointXYZI> ror;
+        if (output->empty()) return;
+
+        pcl::RadiusOutlierRemoval<pcl::PointXYZ> ror;
         ror.setInputCloud(output);
-        ror.setRadiusSearch(0.02);
-        ror.setMinNeighborsInRadius(2);
+        ror.setRadiusSearch(0.03);
+        ror.setMinNeighborsInRadius(3);
         ror.filter(*output);
 
-        pcl::VoxelGrid<pcl::PointXYZI> voxel;
+        if (output->empty()) return;
+
+        pcl::VoxelGrid<pcl::PointXYZ> voxel;
         voxel.setInputCloud(output);
-        voxel.setLeafSize(voxel_leaf_size_ * 0.5, voxel_leaf_size_ * 0.5, voxel_leaf_size_ * 0.5);
+        voxel.setLeafSize(voxel_leaf_size_, voxel_leaf_size_, voxel_leaf_size_);
         voxel.filter(*output);
     }
 
-    ShapeFitResult fitShapeToCluster(pcl::PointCloud<pcl::PointXYZI>::Ptr points)
-    {
-        ShapeFitResult result;
-        result.valid = false;
-        if (points->size() < 5) return result;
-
-        Eigen::MatrixXd A(points->size(), 3);
-        Eigen::VectorXd B(points->size());
-        for (size_t i = 0; i < points->size(); i++) {
-            A(i, 0) = points->points[i].x;
-            A(i, 1) = points->points[i].y;
-            A(i, 2) = 1.0;
-            B(i) = -(points->points[i].x * points->points[i].x +
-                     points->points[i].y * points->points[i].y);
-        }
-
-        Eigen::VectorXd x = (A.transpose() * A).ldlt().solve(A.transpose() * B);
-        if (!x.array().isFinite().all()) return result;
-
-        double center_x = -x(0) / 2.0;
-        double center_y = -x(1) / 2.0;
-        double radius = std::sqrt(x(0) * x(0) + x(1) * x(1) - 4.0 * x(2)) / 2.0;
-        if (!std::isfinite(radius) || radius <= 0 || radius > 0.5) return result;
-
-        double rmse = 0.0;
-        std::vector<double> distances;
-        for (const auto& pt : points->points) {
-            double d = std::hypot(pt.x - center_x, pt.y - center_y);
-            distances.push_back(d);
-            rmse += (d - radius) * (d - radius);
-        }
-        rmse = std::sqrt(rmse / points->size());
-
-        double radial_variance = 0.0;
-        for (double d : distances) radial_variance += (d - radius) * (d - radius);
-        radial_variance /= points->size();
-        double circularity = 1.0 / (1.0 + radial_variance / (radius * radius));
-
-        pcl::PointXYZI min_pt, max_pt;
-        pcl::getMinMax3D(*points, min_pt, max_pt);
-        double extent_x = max_pt.x - min_pt.x;
-        double extent_y = max_pt.y - min_pt.y;
-        double aspect_ratio = (extent_y > 0) ? std::max(extent_x, extent_y) / std::min(extent_x, extent_y) : 1.0;
-
-        result.valid = true;
-        result.center_x = center_x;
-        result.center_y = center_y;
-        result.radius = radius;
-        result.rmse = rmse;
-        result.points_used = points->size();
-        result.circularity = circularity;
-        result.aspect_ratio = aspect_ratio;
-        return result;
-    }
-
-    // Detection (returns vector of DetectedObject)
-    void detectObjects(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud,
-                       const std_msgs::msg::Header& header,
-                       std::vector<lslidar_msgs::msg::DetectedObject>& out_detections)
+    void processAndDetect(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud,
+                          const std_msgs::msg::Header& header)
     {
         std::vector<pcl::PointIndices> cluster_indices;
         clusterCloud(cloud, cluster_indices);
 
+        std::vector<PoleCandidate> current_detections;
+
         for (const auto& indices : cluster_indices) {
             if (indices.indices.size() < static_cast<size_t>(cluster_min_size_)) continue;
+            if (indices.indices.size() > static_cast<size_t>(cluster_max_size_)) continue;
 
-            pcl::PointCloud<pcl::PointXYZI>::Ptr cluster(new pcl::PointCloud<pcl::PointXYZI>);
-            for (int idx : indices.indices) cluster->push_back(cloud->points[idx]);
-
-            if (enable_circle_detection_) {
-                ShapeFitResult shape = fitShapeToCluster(cluster);
-                if (shape.valid) {
-                    double diameter = shape.radius * 2.0;
-                    double diameter_error = std::abs(diameter - expected_diameter_);
-                    if (diameter_error <= detection_tolerance_ && shape.circularity >= 0.6) {
-                        lslidar_msgs::msg::DetectedObject obj;
-                        obj.label = "circular_" + std::to_string(static_cast<int>(diameter*1000)) + "mm";
-                        obj.x = shape.center_x;
-                        obj.y = shape.center_y;
-                        obj.z = 0.0;
-                        obj.confidence = shape.circularity * (1.0 / (1.0 + diameter_error * 100.0));
-                        out_detections.push_back(obj);
-                    }
+            pcl::PointCloud<pcl::PointXYZ>::Ptr cluster(new pcl::PointCloud<pcl::PointXYZ>);
+            for (int idx : indices.indices) {
+                if (idx >= 0 && idx < static_cast<int>(cloud->points.size())) {
+                    cluster->push_back(cloud->points[idx]);
                 }
-            } else {
-                Eigen::Vector4f centroid;
-                pcl::compute3DCentroid(*cluster, centroid);
-                lslidar_msgs::msg::DetectedObject obj;
-                obj.label = "object";
-                obj.x = centroid[0];
-                obj.y = centroid[1];
-                obj.z = centroid[2];
-                obj.confidence = 1.0;
-                out_detections.push_back(obj);
+            }
+
+            pcl::PointXYZ centroid;
+            computeCentroid(*cluster, centroid);
+
+            double radius = estimateClusterRadius(*cluster, centroid);
+
+            double radius_error = std::abs(radius - pole_expected_radius_);
+            if (radius_error <= pole_radius_tolerance_) {
+                PoleCandidate pole(current_detections.size(), centroid.x, centroid.y, centroid.z,
+                                  radius, cluster->size(), header.stamp);
+                current_detections.push_back(pole);
             }
         }
-    }
 
-    // Wrapper for publishing raw detections
-    void detectObjects(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud, const std_msgs::msg::Header& header)
-    {
-        std::vector<lslidar_msgs::msg::DetectedObject> dets;
-        detectObjects(cloud, header, dets);
-        lslidar_msgs::msg::DetectedObjects msg;
-        msg.header = header;
-        msg.objects = dets;
-        objects_pub_->publish(msg);
-    }
-
-    // Tracking update
-    void updateTracker(const std::vector<lslidar_msgs::msg::DetectedObject>& detections, rclcpp::Time stamp)
-    {
-        // Predict all tracks
-        for (auto& track : tracks_) {
-            track.predict(stamp);
+        if (enable_tracking_ && !current_detections.empty()) {
+            updateTracker(current_detections, header);
         }
 
-        std::vector<bool> matched_detections(detections.size(), false);
-        std::vector<bool> matched_tracks(tracks_.size(), false);
+        if (!tracked_poles_.empty()) {
+            if (enable_pattern_matching_ && tracked_poles_.size() >= 2) {
+                matchPolePattern();
+            }
 
-        // Association: nearest neighbor
+            if (publish_distance_matrix_) {
+                publishDistanceMatrix(header);
+            }
+
+            publishMarkers(header);
+            
+            publishTrackedPoles(header);
+        }
+
+        RCLCPP_DEBUG_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
+                             "Detected %zu clusters, tracking %zu poles", 
+                             current_detections.size(), tracked_poles_.size());
+    }
+
+    void updateTracker(const std::vector<PoleCandidate>& detections, 
+                       const std_msgs::msg::Header& header)
+    {
+        std::vector<bool> matched_detections(detections.size(), false);
+        std::vector<bool> matched_tracks(tracked_poles_.size(), false);
+
         for (size_t i = 0; i < detections.size(); ++i) {
-            const auto& d = detections[i];
-            double best_dist = track_max_association_dist_;
+            double best_dist = association_distance_;
             int best_track = -1;
-            for (size_t j = 0; j < tracks_.size(); ++j) {
+            
+            for (size_t j = 0; j < tracked_poles_.size(); ++j) {
                 if (matched_tracks[j]) continue;
-                double dx = d.x - tracks_[j].kf.getX();
-                double dy = d.y - tracks_[j].kf.getY();
+                
+                double dx = detections[i].x - tracked_poles_[j].world_x;
+                double dy = detections[i].y - tracked_poles_[j].world_y;
                 double dist = std::hypot(dx, dy);
+                
                 if (dist < best_dist) {
                     best_dist = dist;
                     best_track = j;
                 }
             }
+            
             if (best_track >= 0) {
                 matched_detections[i] = true;
                 matched_tracks[best_track] = true;
-                tracks_[best_track].update(d.x, d.y, expected_diameter_, 0.8, d.confidence, stamp);
+                tracked_poles_[best_track].update(
+                    detections[i].x, detections[i].y, detections[i].radius, header.stamp);
             }
         }
 
-        // New tracks
         for (size_t i = 0; i < detections.size(); ++i) {
             if (!matched_detections[i]) {
-                const auto& d = detections[i];
-                tracks_.emplace_back(next_track_id_++, d.x, d.y, expected_diameter_, 0.8, d.confidence, stamp);
+                if (tracked_poles_.size() < static_cast<size_t>(max_poles_)) {
+                    TrackedPole new_pole(next_pole_id_++, detections[i].x, detections[i].y,
+                                        detections[i].radius, header.stamp);
+                    tracked_poles_.push_back(new_pole);
+                }
             }
         }
 
-        // Mark unmatched as invisible
-        for (size_t j = 0; j < tracks_.size(); ++j) {
+        for (size_t j = 0; j < tracked_poles_.size(); ++j) {
             if (!matched_tracks[j]) {
-                tracks_[j].markInvisible();
+                tracked_poles_[j].markInvisible();
             }
         }
 
-        // Remove stale tracks
-        tracks_.erase(std::remove_if(tracks_.begin(), tracks_.end(),
-                      [this](const Track& t) { return t.isStale(track_max_invisible_); }),
-                      tracks_.end());
-
-        // Publish tracked objects
-        lslidar_msgs::msg::DetectedObjects tracked_msg;
-        tracked_msg.header.frame_id = "laser_link";  // or whatever the sensor frame is
-        tracked_msg.header.stamp = stamp;
-        for (const auto& track : tracks_) {
-            lslidar_msgs::msg::DetectedObject obj;
-            obj.label = "track_" + std::to_string(track.id);
-            obj.x = track.kf.getX();
-            obj.y = track.kf.getY();
-            obj.z = 0.0;
-            obj.confidence = track.confidence;
-            tracked_msg.objects.push_back(obj);
-        }
-        tracked_objects_pub_->publish(tracked_msg);
-
-        // Visualization markers
-        visualization_msgs::msg::MarkerArray markers;
-        int marker_id = 0;
-        for (const auto& track : tracks_) {
-            visualization_msgs::msg::Marker text_marker;
-            text_marker.header.frame_id = "laser_link";
-            text_marker.header.stamp = stamp;
-            text_marker.ns = "tracked_objects";
-            text_marker.id = marker_id++;
-            text_marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
-            text_marker.action = visualization_msgs::msg::Marker::ADD;
-            text_marker.pose.position.x = track.kf.getX();
-            text_marker.pose.position.y = track.kf.getY();
-            text_marker.pose.position.z = 0.1;
-            text_marker.pose.orientation.w = 1.0;
-            text_marker.scale.z = 0.1;
-            text_marker.color.r = 1.0;
-            text_marker.color.g = 1.0;
-            text_marker.color.b = 1.0;
-            text_marker.color.a = 1.0;
-            std::ostringstream ss;
-            ss << "ID:" << track.id << "\n"
-               << std::fixed << std::setprecision(2)
-               << track.kf.getVx() << "," << track.kf.getVy() << " m/s";
-            text_marker.text = ss.str();
-            text_marker.lifetime = rclcpp::Duration::from_seconds(0.2);
-            markers.markers.push_back(text_marker);
-        }
-        markers_pub_->publish(markers);
+        tracked_poles_.erase(
+            std::remove_if(tracked_poles_.begin(), tracked_poles_.end(),
+                [this](const TrackedPole& t) { return t.isStale(max_invisible_frames_); }),
+            tracked_poles_.end());
     }
 
-    // Main callback (no TF)
-    void cloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
+    void computeCentroid(const pcl::PointCloud<pcl::PointXYZ>& cluster, pcl::PointXYZ& centroid)
     {
-        if (!system_enabled_) return;
+        Eigen::Vector4f centroid_4f;
+        pcl::compute3DCentroid(cluster, centroid_4f);
+        centroid.x = centroid_4f[0];
+        centroid.y = centroid_4f[1];
+        centroid.z = centroid_4f[2];
+    }
 
-        // Convert directly (no transform)
-        pcl::PointCloud<pcl::PointXYZI>::Ptr input_cloud(new pcl::PointCloud<pcl::PointXYZI>);
+    double estimateClusterRadius(const pcl::PointCloud<pcl::PointXYZ>& cluster, const pcl::PointXYZ& centroid)
+    {
+        double sum_dist = 0.0;
+        double max_dist = 0.0;
+        int count = 0;
+        
+        for (const auto& pt : cluster.points) {
+            double dist = std::hypot(pt.x - centroid.x, pt.y - centroid.y);
+            sum_dist += dist;
+            if (dist > max_dist) max_dist = dist;
+            count++;
+        }
+        
+        if (count == 0) return 0.0;
+        
+        double avg_dist = sum_dist / count;
+        // Deleted:double rms_dist = std::sqrt(sum_dist * sum_dist / count);
+        
+        return avg_dist * 1.15;
+    }
+
+    void clusterCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud,
+                      std::vector<pcl::PointIndices>& cluster_indices)
+    {
+        if (!cloud || cloud->empty()) return;
+
         try {
-            pcl::fromROSMsg(*msg, *input_cloud);
+            pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
+            tree->setInputCloud(cloud);
+
+            pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
+            ec.setClusterTolerance(cluster_tolerance_);
+            ec.setMinClusterSize(cluster_min_size_);
+            ec.setMaxClusterSize(cluster_max_size_);
+            ec.setSearchMethod(tree);
+            ec.setInputCloud(cloud);
+            ec.extract(cluster_indices);
+
+            RCLCPP_DEBUG(this->get_logger(), "Found %zu clusters", cluster_indices.size());
         } catch (const std::exception& e) {
-            RCLCPP_ERROR(this->get_logger(), "Failed to convert point cloud: %s", e.what());
-            return;
+            RCLCPP_ERROR(this->get_logger(), "Clustering failed: %s", e.what());
+        }
+    }
+
+    void matchPolePattern()
+    {
+        if (tracked_poles_.size() < 2) return;
+
+        std::map<std::pair<int, int>, double> distances;
+        for (size_t i = 0; i < tracked_poles_.size(); ++i) {
+            for (size_t j = i + 1; j < tracked_poles_.size(); ++j) {
+                double dx = tracked_poles_[i].world_x - tracked_poles_[j].world_x;
+                double dy = tracked_poles_[i].world_y - tracked_poles_[j].world_y;
+                double dist = std::hypot(dx, dy);
+                distances[std::make_pair(tracked_poles_[i].id, tracked_poles_[j].id)] = dist;
+            }
         }
 
-        if (input_cloud->empty()) {
-            RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Empty cloud received");
-            return;
+        int matches = 0;
+        int total = distances.size();
+        
+        for (const auto& pair_dist : distances) {
+            double measured = pair_dist.second;
+            bool matched = false;
+            
+            for (const auto& expected : expected_distances_) {
+                if (std::abs(measured - expected) <= distance_match_tol_) {
+                    matched = true;
+                    break;
+                }
+            }
+            
+            if (matched) matches++;
         }
 
-        pcl::PointCloud<pcl::PointXYZI>::Ptr filtered_cloud(new pcl::PointCloud<pcl::PointXYZI>);
-        applyEnhancedFilters(input_cloud, filtered_cloud);
+        double match_ratio = static_cast<double>(matches) / std::max(1, total);
+        RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                            "Pattern match: %.1f%% (%d/%d distances match expected)", 
+                            match_ratio * 100.0, matches, total);
+    }
 
-        if (filtered_cloud->empty()) {
-            RCLCPP_DEBUG(this->get_logger(), "No points after filtering");
-            return;
-        }
+    void publishDistanceMatrix(const std_msgs::msg::Header&)
+    {
+        if (tracked_poles_.size() < 2) return;
 
-        if (publish_filtered_cloud_) {
-            sensor_msgs::msg::PointCloud2 cloud_msg;
-            pcl::toROSMsg(*filtered_cloud, cloud_msg);
-            cloud_msg.header = msg->header;
-            cloud_pub_->publish(cloud_msg);
-        }
+        std_msgs::msg::Float32MultiArray matrix_msg;
+        matrix_msg.layout.dim.resize(2);
+        matrix_msg.layout.dim[0].label = "pole_i";
+        matrix_msg.layout.dim[0].size = tracked_poles_.size();
+        matrix_msg.layout.dim[0].stride = tracked_poles_.size();
+        matrix_msg.layout.dim[1].label = "pole_j";
+        matrix_msg.layout.dim[1].size = tracked_poles_.size();
+        matrix_msg.layout.dim[1].stride = 1;
 
-        convertToLaserScan(filtered_cloud, msg->header);
+        std_msgs::msg::Float32MultiArray distances_msg;
+        distances_msg.layout.dim.resize(1);
+        distances_msg.layout.dim[0].label = "measurements";
+        distances_msg.layout.dim[0].size = tracked_poles_.size() * (tracked_poles_.size() - 1) / 2 * 5;
 
-        if (detect_objects_) {
-            if (enable_circle_detection_ && num_accumulated_scans_ > 1) {
-                accumulateAndDetect(msg, filtered_cloud);
-            } else {
-                std::vector<lslidar_msgs::msg::DetectedObject> detections;
-                detectObjects(filtered_cloud, msg->header, detections);
-                if (enable_tracking_) {
-                    updateTracker(detections, msg->header.stamp);
+        for (size_t i = 0; i < tracked_poles_.size(); ++i) {
+            for (size_t j = 0; j < tracked_poles_.size(); ++j) {
+                if (i == j) {
+                    matrix_msg.data.push_back(0.0);
                 } else {
-                    lslidar_msgs::msg::DetectedObjects objects_msg;
-                    objects_msg.header = msg->header;
-                    objects_msg.objects = detections;
-                    objects_pub_->publish(objects_msg);
-                }
-            }
-        }
-    }
-
-    void accumulateAndDetect(const sensor_msgs::msg::PointCloud2::SharedPtr& current_msg,
-                            pcl::PointCloud<pcl::PointXYZI>::Ptr filtered_cloud)
-    {
-        scan_buffer_.push_back(filtered_cloud);
-        if (scan_buffer_.size() > static_cast<size_t>(num_accumulated_scans_)) {
-            scan_buffer_.pop_front();
-        }
-
-        if (scan_buffer_.size() < static_cast<size_t>(num_accumulated_scans_)) {
-            RCLCPP_DEBUG(this->get_logger(), "Accumulating: %zu/%d scans", 
-                        scan_buffer_.size(), num_accumulated_scans_);
-            return;
-        }
-
-        pcl::PointCloud<pcl::PointXYZI>::Ptr accumulated_cloud(new pcl::PointCloud<pcl::PointXYZI>);
-        for (const auto& cloud : scan_buffer_) {
-            *accumulated_cloud += *cloud;
-        }
-
-        RCLCPP_DEBUG(this->get_logger(), "Accumulated %zu points from %d scans", 
-                    accumulated_cloud->size(), num_accumulated_scans_);
-
-        std::vector<lslidar_msgs::msg::DetectedObject> detections;
-        detectObjects(accumulated_cloud, current_msg->header, detections);
-        if (enable_tracking_) {
-            updateTracker(detections, current_msg->header.stamp);
-        } else {
-            lslidar_msgs::msg::DetectedObjects objects_msg;
-            objects_msg.header = current_msg->header;
-            objects_msg.objects = detections;
-            objects_pub_->publish(objects_msg);
-        }
-    }
-
-    void clusterCloud(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud,
-                     std::vector<pcl::PointIndices>& cluster_indices)
-    {
-        if (cloud->empty()) return;
-
-        pcl::search::KdTree<pcl::PointXYZI>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZI>);
-        tree->setInputCloud(cloud);
-
-        pcl::EuclideanClusterExtraction<pcl::PointXYZI> ec;
-        ec.setClusterTolerance(cluster_tolerance_ * 0.5);
-        ec.setMinClusterSize(std::max(3, cluster_min_size_ / 2));
-        ec.setMaxClusterSize(cluster_max_size_);
-        ec.setSearchMethod(tree);
-        ec.setInputCloud(cloud);
-        ec.extract(cluster_indices);
-    }
-
-    void convertToLaserScan(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud,
-                            const std_msgs::msg::Header& header)
-    {
-        sensor_msgs::msg::LaserScan scan_msg;
-        scan_msg.header = header;
-        scan_msg.angle_min = -M_PI;
-        scan_msg.angle_max = M_PI;
-        scan_msg.angle_increment = M_PI / 180.0;
-        scan_msg.time_increment = 0.0;
-        scan_msg.scan_time = 0.1;
-        scan_msg.range_min = range_min_;
-        scan_msg.range_max = range_max_;
-
-        int num_ranges = 360;
-        scan_msg.ranges.assign(num_ranges, std::numeric_limits<float>::quiet_NaN());
-        scan_msg.intensities.assign(num_ranges, 0.0f);
-
-        for (const auto& point : cloud->points) {
-            double angle = std::atan2(point.y, point.x);
-            int index = static_cast<int>((angle + M_PI) / scan_msg.angle_increment);
-            if (index >= num_ranges) index = 0;
-
-            float range = std::sqrt(point.x * point.x + point.y * point.y);
-            if (range >= range_min_ && range <= range_max_) {
-                if (std::isnan(scan_msg.ranges[index]) || range < scan_msg.ranges[index]) {
-                    scan_msg.ranges[index] = range;
-                    scan_msg.intensities[index] = point.intensity;
+                    double dist = std::hypot(tracked_poles_[i].world_x - tracked_poles_[j].world_x,
+                                           tracked_poles_[i].world_y - tracked_poles_[j].world_y);
+                    matrix_msg.data.push_back(dist);
                 }
             }
         }
 
-        scan_pub_->publish(scan_msg);
+        for (size_t i = 0; i < tracked_poles_.size(); ++i) {
+            for (size_t j = i + 1; j < tracked_poles_.size(); ++j) {
+                double dist = std::hypot(tracked_poles_[i].world_x - tracked_poles_[j].world_x,
+                                        tracked_poles_[i].world_y - tracked_poles_[j].world_y);
+                double dx = tracked_poles_[i].world_x - tracked_poles_[j].world_x;
+                double dy = tracked_poles_[i].world_y - tracked_poles_[j].world_y;
+
+                distances_msg.data.push_back(dist);
+                distances_msg.data.push_back(std::abs(dx));
+                distances_msg.data.push_back(std::abs(dy));
+                distances_msg.data.push_back(tracked_poles_[i].id);
+                distances_msg.data.push_back(tracked_poles_[j].id);
+            }
+        }
+
+        distance_matrix_pub_->publish(matrix_msg);
+        pole_distances_pub_->publish(distances_msg);
     }
 
-    // Member variables
+    void publishMarkers(const std_msgs::msg::Header& header)
+    {
+        visualization_msgs::msg::MarkerArray markers;
+
+        for (size_t i = 0; i < tracked_poles_.size(); ++i) {
+            const auto& pole = tracked_poles_[i];
+
+            visualization_msgs::msg::Marker sphere;
+            sphere.header = header;
+            sphere.ns = "poles";
+            sphere.id = i * 2;
+            sphere.type = visualization_msgs::msg::Marker::SPHERE;
+            sphere.action = visualization_msgs::msg::Marker::ADD;
+            sphere.pose.position.x = pole.world_x;
+            sphere.pose.position.y = pole.world_y;
+            sphere.pose.position.z = 0.0;
+            sphere.pose.orientation.w = 1.0;
+            sphere.scale.x = pole.avg_radius * 2.0 * 3.0;
+            sphere.scale.y = pole.avg_radius * 2.0 * 3.0;
+            sphere.scale.z = pole.avg_radius * 2.0 * 3.0;
+            sphere.color.r = pole.is_confirmed ? 0.0 : 1.0;
+            sphere.color.g = pole.is_confirmed ? 1.0 : 0.0;
+            sphere.color.b = 0.0;
+            sphere.color.a = 0.8;
+            sphere.lifetime = rclcpp::Duration::from_seconds(0.5);
+            markers.markers.push_back(sphere);
+
+            visualization_msgs::msg::Marker text;
+            text.header = header;
+            text.ns = "pole_labels";
+            text.id = i * 2 + 1;
+            text.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+            text.action = visualization_msgs::msg::Marker::ADD;
+            text.pose.position.x = pole.world_x;
+            text.pose.position.y = pole.world_y;
+            text.pose.position.z = 0.3;
+            text.pose.orientation.w = 1.0;
+            text.scale.z = 0.15;
+            text.color.r = 1.0;
+            text.color.g = 1.0;
+            text.color.b = 1.0;
+            text.color.a = 1.0;
+            text.text = "P" + std::to_string(pole.id) + "\n(" + 
+                       std::to_string(static_cast<int>(pole.total_detections)) + ")";
+            text.lifetime = rclcpp::Duration::from_seconds(0.5);
+            markers.markers.push_back(text);
+        }
+
+        marker_pub_->publish(markers);
+    }
+    
+    void publishTrackedPoles(const std_msgs::msg::Header& header)
+    {
+        lslidar_msgs::msg::DetectedObjects poles_msg;
+        poles_msg.header = header;
+        
+        for (const auto& pole : tracked_poles_) {
+            if (!pole.is_confirmed) continue;
+            
+            lslidar_msgs::msg::DetectedObject obj;
+            obj.label = "pole_" + std::to_string(pole.id);
+            obj.x = pole.world_x;
+            obj.y = pole.world_y;
+            obj.z = 0.0;
+            obj.confidence = std::min(1.0, pole.total_detections / 20.0);
+            obj.velocity_x = 0.0;
+            obj.velocity_y = 0.0;
+            poles_msg.objects.push_back(obj);
+        }
+        
+        poles_pub_->publish(poles_msg);
+        
+        lslidar_msgs::msg::DetectedObjects objects_msg;
+        objects_msg.header = header;
+        objects_msg.objects = poles_msg.objects;
+        objects_pub_->publish(objects_msg);
+    }
+
     std::string input_topic_;
-    std::string output_scan_topic_;
     std::string output_cloud_topic_;
     double range_min_, range_max_;
     double z_min_, z_max_;
@@ -610,30 +607,37 @@ private:
     double cluster_tolerance_;
     bool publish_filtered_cloud_;
     bool detect_objects_;
-    bool classify_surfaces_;
-    bool system_enabled_;
-    bool processing_active_;
-    std::mutex mutex_;
 
-    bool enable_circle_detection_;
-    double expected_diameter_;
-    double detection_tolerance_;
-    int num_accumulated_scans_;
-
+    double pole_expected_radius_;
+    double pole_radius_tolerance_;
+    double pole_min_distance_;
+    double pole_max_distance_;
+    std::vector<double> expected_distances_;
+    double distance_match_tol_;
+    bool enable_pattern_matching_;
+    bool publish_distance_matrix_;
+    
+    int max_poles_;
+    double association_distance_;
+    int max_invisible_frames_;
     bool enable_tracking_;
-    double track_max_association_dist_;
-    int track_max_invisible_;
-    int next_track_id_;
-    std::vector<Track> tracks_;
+    bool debug_mode_;
+
+    std::vector<TrackedPole> tracked_poles_;
+    int next_pole_id_;
+    
+    nav_msgs::msg::Odometry latest_odom_;
+    bool has_odom_;
+    std::mutex odom_mutex_;
 
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr cloud_sub_;
-    rclcpp::Publisher<sensor_msgs::msg::LaserScan>::SharedPtr scan_pub_;
+    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr cloud_pub_;
     rclcpp::Publisher<lslidar_msgs::msg::DetectedObjects>::SharedPtr objects_pub_;
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr markers_pub_;
-    rclcpp::Publisher<lslidar_msgs::msg::DetectedObjects>::SharedPtr tracked_objects_pub_;
-
-    std::deque<pcl::PointCloud<pcl::PointXYZI>::Ptr> scan_buffer_;
+    rclcpp::Publisher<lslidar_msgs::msg::DetectedObjects>::SharedPtr poles_pub_;
+    rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr distance_matrix_pub_;
+    rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr pole_distances_pub_;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
 };
 
 int main(int argc, char** argv)

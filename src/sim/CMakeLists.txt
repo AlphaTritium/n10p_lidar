@@ -17,6 +17,10 @@ find_package(nav_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common io filters segmentation kdtree search surface)
+find_package(rclcpp_action REQUIRED)
+find_package(rc2026_interfaces REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
 
 #add_executable(lidar_app_node src/lidar_app_node.cpp)
 #ament_target_dependencies(lidar_app_node
@@ -29,6 +33,12 @@ find_package(PCL REQUIRED COMPONENTS common io filters segmentation kdtree searc
 
 #target_link_libraries(lidar_app_node
 #  ${PCL_LIBRARIES}
+#)
+
+#install(TARGETS
+#  lidar_app_node
+#  lidar_pointcloud_processor
+#  DESTINATION lib/${PROJECT_NAME}
 #)
 
 add_executable(lidar_pointcloud_processor src/lidar_pointcloud_processor.cpp)
@@ -44,15 +54,40 @@ ament_target_dependencies(lidar_pointcloud_processor
   geometry_msgs
 )
 
+add_executable(object_positioning_server src/object_positioning_server.cpp)
+ament_target_dependencies(object_positioning_server
+  rclcpp
+  rclcpp_action
+  rc2026_interfaces
+  lslidar_msgs
+  geometry_msgs
+  visualization_msgs
+  std_msgs
+  sensor_msgs
+  pcl_conversions
+  tf2_ros
+  tf2
+)
+
 target_link_libraries(lidar_pointcloud_processor
   ${PCL_LIBRARIES}
 )
 
-#install(TARGETS
-#  lidar_app_node
-#  lidar_pointcloud_processor
-#  DESTINATION lib/${PROJECT_NAME}
-#)
+target_link_libraries(object_positioning_server
+  ${PCL_LIBRARIES}
+)
+
+install(TARGETS
+  lidar_pointcloud_processor
+  object_positioning_server
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(PROGRAMS
+  scripts/lidar_control.py
+  scripts/positioning_client.py
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 install(
   DIRECTORY launch config urdf
