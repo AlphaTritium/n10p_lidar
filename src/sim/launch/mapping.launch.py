@@ -60,6 +60,7 @@ def generate_launch_description():
         }.items()
     )
 
+    '''
     # Simulation (Gazebo)
     sim_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
@@ -72,6 +73,7 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration('use_simulation')),
         launch_arguments={'use_sim_time': LaunchConfiguration('use_sim_time')}.items()
     )
+    '''
 
     # Point Cloud Processor - Pure PCL processing
     pointcloud_processor_node = Node(
@@ -83,17 +85,21 @@ def generate_launch_description():
             'input_topic': '/lslidar_point_cloud',
             'output_scan_topic': '/scan_processed',
             'output_cloud_topic': '/cloud_processed',
-            'range_min': 0.15,
-            'range_max': 12.0,
-            'z_min': -1.0,
-            'z_max': 2.0,
-            'voxel_leaf_size': 0.02,
-            'cluster_min_size': 8,
-            'cluster_max_size': 500,
-            'cluster_tolerance': 0.1,
+            'range_min': 0.25,
+            'range_max': 1.0,
+            'z_min': -0.5,
+            'z_max': 0.5,
+            'voxel_leaf_size': 0.005,
+            'cluster_min_size': 3,
+            'cluster_max_size': 100,
+            'cluster_tolerance': 0.03,
             'publish_filtered_cloud': True,
             'detect_objects': True,
             'classify_surfaces': False,
+            'enable_circle_detection': True,
+            'expected_object_diameter': 0.025,
+            'detection_tolerance': 0.005,
+            'accumulated_scans': 5,
         }]
     ),
     
@@ -108,8 +114,8 @@ def generate_launch_description():
             'cloud_topic': '/lslidar_point_cloud',
             'objects_topic': '/detected_objects',
             'min_range': 0.0,
-            'max_range': 12.0,
-            'expected_beams': 180,
+            'max_range': 10.0,
+            'expected_beams': 1080,
         }]
     ),
 
@@ -179,7 +185,6 @@ def generate_launch_description():
         lidar_name_arg,
         baudrate_arg,
         real_driver_launch,
-        sim_launch,
         pointcloud_processor_node,
         slam_node,
         rviz_node,

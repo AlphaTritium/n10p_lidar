@@ -23,9 +23,9 @@ public:
         this->declare_parameter<std::string>("scan_topic", "/scan");
         this->declare_parameter<std::string>("cloud_topic", "/lslidar_point_cloud");
         this->declare_parameter<std::string>("objects_topic", "/detected_objects");
-        this->declare_parameter<float>("min_range", 0.15);
-        this->declare_parameter<float>("max_range", 12.0);
-        this->declare_parameter<int>("expected_beams", 720);
+        this->declare_parameter<float>("min_range", 0.0);
+        this->declare_parameter<float>("max_range", 10.0);
+        this->declare_parameter<int>("expected_beams", 1080);
         
         scan_topic_ = this->get_parameter("scan_topic").as_string();
         cloud_topic_ = this->get_parameter("cloud_topic").as_string();

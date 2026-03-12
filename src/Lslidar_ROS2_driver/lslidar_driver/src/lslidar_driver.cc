@@ -64,8 +64,8 @@ namespace lslidar_driver
 		lidar_name = std::string("N10_P");
 		pointcloud_topic = std::string("/lslidar_point_cloud");
 		is_start = true;
-		min_range = 0.3;
-		max_range = 100.0;
+		min_range = 0.0;
+		max_range = 10.0;
 		use_gps_ts = true;
 		compensation = true;
 		pubScan = true;
@@ -77,7 +77,7 @@ namespace lslidar_driver
 		this->declare_parameter<std::string>("frame_id", "laser_link");
 		this->declare_parameter<std::string>("scan_topic", "/scan");
 		this->declare_parameter<std::string>("pointcloud_topic", "/lslidar_point_cloud");
-		this->declare_parameter<double>("min_range", 0.3);
+		this->declare_parameter<double>("min_range", 0.0);
 		this->declare_parameter<double>("max_range", 100.0);
 		this->declare_parameter<bool>("use_gps_ts", false);
 		this->declare_parameter<bool>("high_reflection", false);

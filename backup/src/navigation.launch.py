@@ -42,6 +42,7 @@ def generate_launch_description():
         condition=UnlessCondition(LaunchConfiguration('use_simulation'))
     )
 
+    '''
     # Simulation
     sim_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
@@ -54,6 +55,7 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration('use_simulation')),
         launch_arguments={'use_sim_time': LaunchConfiguration('use_sim_time')}.items()
     )
+    '''
 
     # Processor node
     processor_node = Node(
@@ -84,6 +86,7 @@ def generate_launch_description():
         }]
     )
 
+    '''
     # AMCL – use filtered scan via remapping
     amcl = Node(
         package='nav2_amcl',
@@ -131,7 +134,7 @@ def generate_launch_description():
         }]
     )
 
-    '''
+    
     # Application node
     app_node = Node(
         package='sim',
@@ -144,6 +147,24 @@ def generate_launch_description():
         }]
     )
     '''
+
+    # Static transform: odom -> base_link
+    Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='odom_to_base_link',
+        arguments=['0', '0', '0', '0', '0', '0', 'odom', 'base_link'],
+        output='screen'
+    ),
+
+    # Static transform: base_link -> laser_link
+    Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='base_link_to_laser_link',
+        arguments=['0', '0', '0.1', '0', '0', '0', 'base_link', 'laser_link'],
+        output='screen'
+    ),
 
     # RViz
     rviz_node = Node(
@@ -164,12 +185,7 @@ def generate_launch_description():
         start_rviz_arg,
         map_yaml_file_arg,
         real_driver_launch,
-        sim_launch,
-        processor_node,          # <-- added
+        processor_node,      
         map_server,
-        amcl,
-        nav2_bringup,
-        lifecycle_manager,
-        app_node,
         rviz_node,
     ])
