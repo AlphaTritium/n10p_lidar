@@ -26,8 +26,8 @@ public:
         this->declare_parameter<std::string>("input_scan_topic", "/scan");
         this->declare_parameter<std::string>("output_scan_topic", "/scan_filtered");
         this->declare_parameter<std::string>("output_cloud_topic", "");
-        this->declare_parameter<float>("range_min", 0.15);
-        this->declare_parameter<float>("range_max", 12.0);
+        this->declare_parameter<float>("range_min", 0.0);
+        this->declare_parameter<float>("range_max", 0.8);
         this->declare_parameter<bool>("publish_cloud", false);
         this->declare_parameter<std::string>("target_frame", "laser");
 

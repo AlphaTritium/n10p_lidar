@@ -23,7 +23,7 @@ def generate_launch_description():
                 'scan_topic': '/scan',
                 'pointcloud_topic': '/lslidar_point_cloud',
                 'min_range': 0.0,
-                'max_range': 10.0,
+                'max_range': 0.8,
                 'pubScan': True,
                 'pubPointCloud2': True,
                 'use_gps_ts': False,

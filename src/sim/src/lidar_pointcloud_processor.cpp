@@ -1,6 +1,5 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
-#include <sensor_msgs/msg/laser_scan.hpp>
 #include <std_msgs/msg/float32.hpp>
 #include <std_msgs/msg/float32_multi_array.hpp>
 #include <geometry_msgs/msg/point_stamped.hpp>
@@ -9,13 +8,12 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
-#include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/passthrough.h>
 #include <pcl/filters/statistical_outlier_removal.h>
-#include <pcl/filters/radius_outlier_removal.h>
 #include <pcl/segmentation/extract_clusters.h>
 #include <pcl/kdtree/kdtree.h>
 #include <pcl/common/centroid.h>
+#include <pcl/common/common.h>
 #include <lslidar_msgs/msg/detected_objects.hpp>
 #include <lslidar_msgs/msg/detected_object.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
@@ -28,6 +26,7 @@
 #include <algorithm>
 #include <map>
 #include <set>
+#include <unordered_map>
 
 struct PoleCandidate
 {
@@ -91,26 +90,28 @@ public:
           max_poles_(6),
           association_distance_(0.15),
           max_invisible_frames_(20),
-          next_pole_id_(0)
+          next_pole_id_(0),
+          scan_accumulator_(new pcl::PointCloud<pcl::PointXYZI>()),
+          accumulation_count_(0)
     {
         this->declare_parameter<std::string>("input_topic", "/lslidar_point_cloud");
-        this->declare_parameter<std::string>("output_cloud_topic", "/cloud_processed");
         this->declare_parameter<double>("range_min", 0.2);
-        this->declare_parameter<double>("range_max", 5.0);
+        this->declare_parameter<double>("range_max", 0.8);
         this->declare_parameter<double>("z_min", -0.3);
         this->declare_parameter<double>("z_max", 0.3);
-        this->declare_parameter<double>("voxel_leaf_size", 0.02);
-        this->declare_parameter<int>("cluster_min_size", 8);
-        this->declare_parameter<int>("cluster_max_size", 150);
+        this->declare_parameter<int>("cluster_min_size", 6);
+        this->declare_parameter<int>("cluster_max_size", 100);
         this->declare_parameter<double>("cluster_tolerance", 0.05);
-        this->declare_parameter<bool>("publish_filtered_cloud", true);
         this->declare_parameter<bool>("detect_objects", true);
         
-        this->declare_parameter<double>("pole_expected_radius", 0.0125);
+        this->declare_parameter<double>("pole_expected_radius", 0.028);
         this->declare_parameter<double>("pole_radius_tolerance", 0.008);
-        this->declare_parameter<double>("pole_min_distance", 0.1);
-        this->declare_parameter<double>("pole_max_distance", 3.0);
-        this->declare_parameter<std::vector<double>>("expected_inter_pole_distances", std::vector<double>{0.185, 0.100});
+        this->declare_parameter<double>("pole_min_intensity", 50.0);
+        this->declare_parameter<double>("pole_intensity_ratio", 1.5);
+        this->declare_parameter<int>("min_scans_to_accumulate", 3);
+        this->declare_parameter<double>("accumulation_angle_threshold", 0.1);
+        
+        this->declare_parameter<std::vector<double>>("expected_inter_pole_distances", std::vector<double>{0.185});
         this->declare_parameter<double>("distance_match_tolerance", 0.03);
         this->declare_parameter<bool>("enable_pattern_matching", true);
         this->declare_parameter<bool>("publish_distance_matrix", true);
@@ -119,24 +120,26 @@ public:
         this->declare_parameter<double>("association_distance", 0.15);
         this->declare_parameter<int>("max_invisible_frames", 20);
         this->declare_parameter<bool>("enable_tracking", true);
+        this->declare_parameter<bool>("use_intensity_filtering", true);
+        this->declare_parameter<bool>("use_scan_accumulation", true);
 
         input_topic_ = this->get_parameter("input_topic").as_string();
-        output_cloud_topic_ = this->get_parameter("output_cloud_topic").as_string();
         range_min_ = this->get_parameter("range_min").as_double();
         range_max_ = this->get_parameter("range_max").as_double();
         z_min_ = this->get_parameter("z_min").as_double();
         z_max_ = this->get_parameter("z_max").as_double();
-        voxel_leaf_size_ = this->get_parameter("voxel_leaf_size").as_double();
         cluster_min_size_ = this->get_parameter("cluster_min_size").as_int();
         cluster_max_size_ = this->get_parameter("cluster_max_size").as_int();
         cluster_tolerance_ = this->get_parameter("cluster_tolerance").as_double();
-        publish_filtered_cloud_ = this->get_parameter("publish_filtered_cloud").as_bool();
         detect_objects_ = this->get_parameter("detect_objects").as_bool();
         
         pole_expected_radius_ = this->get_parameter("pole_expected_radius").as_double();
         pole_radius_tolerance_ = this->get_parameter("pole_radius_tolerance").as_double();
-        pole_min_distance_ = this->get_parameter("pole_min_distance").as_double();
-        pole_max_distance_ = this->get_parameter("pole_max_distance").as_double();
+        pole_min_intensity_ = this->get_parameter("pole_min_intensity").as_double();
+        pole_intensity_ratio_ = this->get_parameter("pole_intensity_ratio").as_double();
+        min_scans_to_accumulate_ = this->get_parameter("min_scans_to_accumulate").as_int();
+        accumulation_angle_threshold_ = this->get_parameter("accumulation_angle_threshold").as_double();
+        
         expected_distances_ = this->get_parameter("expected_inter_pole_distances").as_double_array();
         distance_match_tol_ = this->get_parameter("distance_match_tolerance").as_double();
         enable_pattern_matching_ = this->get_parameter("enable_pattern_matching").as_bool();
@@ -146,6 +149,8 @@ public:
         association_distance_ = this->get_parameter("association_distance").as_double();
         max_invisible_frames_ = this->get_parameter("max_invisible_frames").as_int();
         enable_tracking_ = this->get_parameter("enable_tracking").as_bool();
+        use_intensity_filtering_ = this->get_parameter("use_intensity_filtering").as_bool();
+        use_scan_accumulation_ = this->get_parameter("use_scan_accumulation").as_bool();
 
         cloud_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
             input_topic_, 10, std::bind(&LidarProcessor::cloudCallback, this, std::placeholders::_1));
@@ -153,23 +158,20 @@ public:
         odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
             "/odom", 10, std::bind(&LidarProcessor::odomCallback, this, std::placeholders::_1));
 
-        cloud_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(output_cloud_topic_, 10);
         objects_pub_ = this->create_publisher<lslidar_msgs::msg::DetectedObjects>("/detected_objects", 10);
         poles_pub_ = this->create_publisher<lslidar_msgs::msg::DetectedObjects>("/detected_poles", 10);
         distance_matrix_pub_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("/pole_distance_matrix", 10);
         pole_distances_pub_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("/inter_pole_distances", 10);
         marker_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/pole_markers", 10);
         
-        // tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
-        // tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
-
         RCLCPP_INFO(this->get_logger(), "LiDAR Pole Detector initialized");
         RCLCPP_INFO(this->get_logger(), "Expected pole radius: %.3f m (+/-%.3f)", pole_expected_radius_, pole_radius_tolerance_);
         RCLCPP_INFO(this->get_logger(), "Max poles to track: %d", max_poles_);
         RCLCPP_INFO(this->get_logger(), "Tracking: %s", enable_tracking_ ? "ENABLED" : "DISABLED");
-        RCLCPP_INFO(this->get_logger(), "Expected inter-pole distances: ");
-        for (const auto& d : expected_distances_) {
-            RCLCPP_INFO(this->get_logger(), "  %.3f m (+/-%.3f)", d, distance_match_tol_);
+        RCLCPP_INFO(this->get_logger(), "Intensity filtering: %s", use_intensity_filtering_ ? "ENABLED" : "DISABLED");
+        RCLCPP_INFO(this->get_logger(), "Scan accumulation: %s", use_scan_accumulation_ ? "ENABLED" : "DISABLED");
+        if (use_scan_accumulation_) {
+            RCLCPP_INFO(this->get_logger(), "Min scans to accumulate: %d", min_scans_to_accumulate_);
         }
     }
 
@@ -178,28 +180,33 @@ private:
     {
         if (!msg || msg->width == 0 || msg->data.empty()) return;
 
-        pcl::PointCloud<pcl::PointXYZ>::Ptr input_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-        convertPointCloud(msg, input_cloud);
+        pcl::PointCloud<pcl::PointXYZI>::Ptr input_cloud(new pcl::PointCloud<pcl::PointXYZI>);
+        convertPointCloudWithIntensity(msg, input_cloud);
 
         if (input_cloud->empty()) return;
 
-        pcl::PointCloud<pcl::PointXYZ>::Ptr filtered_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-        applyFilters(input_cloud, filtered_cloud);
+        pcl::PointCloud<pcl::PointXYZI>::Ptr filtered_cloud(new pcl::PointCloud<pcl::PointXYZI>);
+        applyBasicFiltering(input_cloud, filtered_cloud);
 
         if (filtered_cloud->empty()) return;
 
-        if (publish_filtered_cloud_) {
-            sensor_msgs::msg::PointCloud2 cloud_msg;
-            pcl::PCLPointCloud2 pcl_pc2;
-            pcl::toPCLPointCloud2(*filtered_cloud, pcl_pc2);
-            pcl_conversions::fromPCL(pcl_pc2, cloud_msg);
-            cloud_msg.header = msg->header;
-            cloud_msg.header.frame_id = "laser_link";
-            cloud_pub_->publish(cloud_msg);
+        if (use_scan_accumulation_) {
+            accumulateScan(filtered_cloud);
+            if (accumulation_count_ < min_scans_to_accumulate_) {
+                return;
+            }
         }
 
+        pcl::PointCloud<pcl::PointXYZI>::Ptr processing_cloud = 
+            use_scan_accumulation_ ? scan_accumulator_ : filtered_cloud;
+
         if (detect_objects_) {
-            processAndDetect(filtered_cloud, msg->header);
+            processAndDetect(processing_cloud, msg->header);
+        }
+
+        if (use_scan_accumulation_ && accumulation_count_ >= min_scans_to_accumulate_) {
+            scan_accumulator_->clear();
+            accumulation_count_ = 0;
         }
     }
     
@@ -209,8 +216,35 @@ private:
         has_odom_ = true;
     }
 
-    void convertPointCloud(const sensor_msgs::msg::PointCloud2::SharedPtr& msg,
-                           pcl::PointCloud<pcl::PointXYZ>::Ptr output)
+    void accumulateScan(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud)
+    {
+        static double last_angle = 0.0;
+        static rclcpp::Time last_stamp = this->now();
+        
+        double current_angle = 0.0;
+        for (const auto& pt : cloud->points) {
+            if (pt.x > 0.1) {
+                current_angle = std::atan2(pt.y, pt.x);
+                break;
+            }
+        }
+        
+        double angle_diff = std::abs(current_angle - last_angle);
+        if (angle_diff > accumulation_angle_threshold_ || 
+            (this->now() - last_stamp).seconds() > 0.5) {
+            
+            *scan_accumulator_ += *cloud;
+            accumulation_count_++;
+            last_angle = current_angle;
+            last_stamp = this->now();
+            
+            RCLCPP_DEBUG(this->get_logger(), "Accumulated scan %d/%d", 
+                        accumulation_count_, min_scans_to_accumulate_);
+        }
+    }
+
+    void convertPointCloudWithIntensity(const sensor_msgs::msg::PointCloud2::SharedPtr& msg,
+                                        pcl::PointCloud<pcl::PointXYZI>::Ptr output)
     {
         output->header.frame_id = msg->header.frame_id;
         output->width = msg->width;
@@ -218,12 +252,14 @@ private:
         output->is_dense = msg->is_dense;
         output->points.resize(msg->width * msg->height);
 
-        int x_offset = -1, y_offset = -1, z_offset = -1;
+        int x_offset = -1, y_offset = -1, z_offset = -1, intensity_offset = -1;
         for (size_t i = 0; i < msg->fields.size(); ++i) {
             const auto& field = msg->fields[i];
             if (field.name == "x") x_offset = field.offset;
             else if (field.name == "y") y_offset = field.offset;
             else if (field.name == "z") z_offset = field.offset;
+            else if (field.name == "intensity" || field.name == "reflectivity") 
+                intensity_offset = field.offset;
         }
 
         if (x_offset < 0 || y_offset < 0 || z_offset < 0) {
@@ -237,43 +273,39 @@ private:
             output->points[i].x = *reinterpret_cast<const float*>(point_data + x_offset);
             output->points[i].y = *reinterpret_cast<const float*>(point_data + y_offset);
             output->points[i].z = *reinterpret_cast<const float*>(point_data + z_offset);
+            
+            if (intensity_offset >= 0) {
+                output->points[i].intensity = *reinterpret_cast<const float*>(point_data + intensity_offset);
+            } else {
+                output->points[i].intensity = 0.0;
+            }
         }
     }
 
-    void applyFilters(pcl::PointCloud<pcl::PointXYZ>::Ptr input,
-                      pcl::PointCloud<pcl::PointXYZ>::Ptr output)
+    void applyBasicFiltering(pcl::PointCloud<pcl::PointXYZI>::Ptr input,
+                             pcl::PointCloud<pcl::PointXYZI>::Ptr output)
     {
-        pcl::PassThrough<pcl::PointXYZ> pass;
-        pass.setInputCloud(input);
-        pass.setFilterFieldName("z");
-        pass.setFilterLimits(z_min_, z_max_);
-        pass.filter(*output);
-
-        if (output->empty()) return;
-
-        pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor;
-        sor.setInputCloud(output);
-        sor.setMeanK(8);
-        sor.setStddevMulThresh(1.0);
-        sor.filter(*output);
-
-        if (output->empty()) return;
-
-        pcl::RadiusOutlierRemoval<pcl::PointXYZ> ror;
-        ror.setInputCloud(output);
-        ror.setRadiusSearch(0.03);
-        ror.setMinNeighborsInRadius(3);
-        ror.filter(*output);
-
-        if (output->empty()) return;
-
-        pcl::VoxelGrid<pcl::PointXYZ> voxel;
-        voxel.setInputCloud(output);
-        voxel.setLeafSize(voxel_leaf_size_, voxel_leaf_size_, voxel_leaf_size_);
-        voxel.filter(*output);
+        output->clear();
+        output->header = input->header;
+        
+        for (const auto& pt : input->points) {
+            double dist = std::hypot(pt.x, pt.y);
+            
+            if (dist < range_min_ || dist > range_max_) continue;
+            if (pt.z < z_min_ || pt.z > z_max_) continue;
+            
+            if (use_intensity_filtering_ && pt.intensity < pole_min_intensity_) {
+                continue;
+            }
+            
+            output->push_back(pt);
+        }
+        
+        RCLCPP_DEBUG(this->get_logger(), "Filtered from %zu to %zu points", 
+                    input->size(), output->size());
     }
 
-    void processAndDetect(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud,
+    void processAndDetect(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud,
                           const std_msgs::msg::Header& header)
     {
         std::vector<pcl::PointIndices> cluster_indices;
@@ -285,29 +317,47 @@ private:
             if (indices.indices.size() < static_cast<size_t>(cluster_min_size_)) continue;
             if (indices.indices.size() > static_cast<size_t>(cluster_max_size_)) continue;
 
-            pcl::PointCloud<pcl::PointXYZ>::Ptr cluster(new pcl::PointCloud<pcl::PointXYZ>);
+            pcl::PointCloud<pcl::PointXYZI>::Ptr cluster(new pcl::PointCloud<pcl::PointXYZI>);
             for (int idx : indices.indices) {
                 if (idx >= 0 && idx < static_cast<int>(cloud->points.size())) {
                     cluster->push_back(cloud->points[idx]);
                 }
             }
 
+            if (!validateCluster(cluster)) continue;
+
             pcl::PointXYZ centroid;
             computeCentroid(*cluster, centroid);
 
             double radius = estimateClusterRadius(*cluster, centroid);
+            double avg_intensity = computeAverageIntensity(*cluster);
 
             double radius_error = std::abs(radius - pole_expected_radius_);
             if (radius_error <= pole_radius_tolerance_) {
                 PoleCandidate pole(current_detections.size(), centroid.x, centroid.y, centroid.z,
                                   radius, cluster->size(), header.stamp);
+                pole.neighbor_distances = getNeighborDistances(cloud, centroid);
                 current_detections.push_back(pole);
+                
+                RCLCPP_DEBUG(this->get_logger(), "Valid pole: (%.3f, %.3f) r=%.3f intensity=%.1f",
+                           centroid.x, centroid.y, radius, avg_intensity);
             }
         }
 
         if (enable_tracking_ && !current_detections.empty()) {
             updateTracker(current_detections, header);
+        } else if (!enable_tracking_) {
+            for (const auto& det : current_detections) {
+                TrackedPole temp_pole(next_pole_id_++, det.x, det.y, det.radius, header.stamp);
+                temp_pole.is_confirmed = true;
+                temp_pole.total_detections = 20;
+                tracked_poles_.push_back(temp_pole);
+            }
         }
+
+        RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
+                            "Clusters: %zu -> Poles: %zu -> Tracking: %zu",
+                            cluster_indices.size(), current_detections.size(), tracked_poles_.size());
 
         if (!tracked_poles_.empty()) {
             if (enable_pattern_matching_ && tracked_poles_.size() >= 2) {
@@ -319,13 +369,66 @@ private:
             }
 
             publishMarkers(header);
-            
             publishTrackedPoles(header);
         }
+    }
 
-        RCLCPP_DEBUG_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
-                             "Detected %zu clusters, tracking %zu poles", 
-                             current_detections.size(), tracked_poles_.size());
+    bool validateCluster(pcl::PointCloud<pcl::PointXYZI>::Ptr cluster)
+    {
+        if (cluster->empty()) return false;
+
+        double avg_intensity = computeAverageIntensity(*cluster);
+        if (use_intensity_filtering_ && avg_intensity < pole_min_intensity_) {
+            return false;
+        }
+
+        Eigen::Vector4f min_pt, max_pt;
+        pcl::getMinMax3D(*cluster, min_pt, max_pt);
+        
+        double width = max_pt[0] - min_pt[0];
+        double depth = max_pt[1] - min_pt[1];
+        
+        if (width > pole_expected_radius_ * 3 || depth > pole_expected_radius_ * 3) {
+            return false;
+        }
+
+        double intensity_stddev = computeIntensityStdDev(*cluster, avg_intensity);
+        if (intensity_stddev > avg_intensity * 0.5) {
+            return false;
+        }
+
+        return true;
+    }
+
+    double computeAverageIntensity(const pcl::PointCloud<pcl::PointXYZI>& cluster)
+    {
+        double sum = 0.0;
+        for (const auto& pt : cluster.points) {
+            sum += pt.intensity;
+        }
+        return cluster.empty() ? 0.0 : sum / cluster.size();
+    }
+
+    double computeIntensityStdDev(const pcl::PointCloud<pcl::PointXYZI>& cluster, double mean)
+    {
+        double sum_sq = 0.0;
+        for (const auto& pt : cluster.points) {
+            double diff = pt.intensity - mean;
+            sum_sq += diff * diff;
+        }
+        return cluster.empty() ? 0.0 : std::sqrt(sum_sq / cluster.size());
+    }
+
+    std::vector<double> getNeighborDistances(const pcl::PointCloud<pcl::PointXYZI>::Ptr cloud,
+                                             const pcl::PointXYZ& center)
+    {
+        std::vector<double> distances;
+        for (const auto& pt : cloud->points) {
+            double dist = std::hypot(pt.x - center.x, pt.y - center.y);
+            distances.push_back(dist);
+        }
+        std::sort(distances.begin(), distances.end());
+        return distances;
     }
 
     void updateTracker(const std::vector<PoleCandidate>& detections, 
@@ -381,7 +484,7 @@ private:
             tracked_poles_.end());
     }
 
-    void computeCentroid(const pcl::PointCloud<pcl::PointXYZ>& cluster, pcl::PointXYZ& centroid)
+    void computeCentroid(const pcl::PointCloud<pcl::PointXYZI>& cluster, pcl::PointXYZ& centroid)
     {
         Eigen::Vector4f centroid_4f;
         pcl::compute3DCentroid(cluster, centroid_4f);
@@ -390,7 +493,7 @@ private:
         centroid.z = centroid_4f[2];
     }
 
-    double estimateClusterRadius(const pcl::PointCloud<pcl::PointXYZ>& cluster, const pcl::PointXYZ& centroid)
+    double estimateClusterRadius(const pcl::PointCloud<pcl::PointXYZI>& cluster, const pcl::PointXYZ& centroid)
     {
         double sum_dist = 0.0;
         double max_dist = 0.0;
@@ -406,21 +509,19 @@ private:
         if (count == 0) return 0.0;
         
         double avg_dist = sum_dist / count;
-        // Deleted:double rms_dist = std::sqrt(sum_dist * sum_dist / count);
-        
         return avg_dist * 1.15;
     }
 
-    void clusterCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud,
+    void clusterCloud(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud,
                       std::vector<pcl::PointIndices>& cluster_indices)
     {
         if (!cloud || cloud->empty()) return;
 
         try {
-            pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
+            pcl::search::KdTree<pcl::PointXYZI>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZI>);
             tree->setInputCloud(cloud);
 
-            pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
+            pcl::EuclideanClusterExtraction<pcl::PointXYZI> ec;
             ec.setClusterTolerance(cluster_tolerance_);
             ec.setMinClusterSize(cluster_min_size_);
             ec.setMaxClusterSize(cluster_max_size_);
@@ -428,7 +529,7 @@ private:
             ec.setInputCloud(cloud);
             ec.extract(cluster_indices);
 
-            RCLCPP_DEBUG(this->get_logger(), "Found %zu clusters", cluster_indices.size());
+            RCLCPP_DEBUG(this->get_logger(), "Clustering extracted %zu clusters", cluster_indices.size());
         } catch (const std::exception& e) {
             RCLCPP_ERROR(this->get_logger(), "Clustering failed: %s", e.what());
         }
@@ -576,9 +677,10 @@ private:
         lslidar_msgs::msg::DetectedObjects poles_msg;
         poles_msg.header = header;
         
+        RCLCPP_INFO(this->get_logger(), "=== POLE DETECTION UPDATE ===");
+        RCLCPP_INFO(this->get_logger(), "Total tracked poles: %zu", tracked_poles_.size());
+        
         for (const auto& pole : tracked_poles_) {
-            if (!pole.is_confirmed) continue;
-            
             lslidar_msgs::msg::DetectedObject obj;
             obj.label = "pole_" + std::to_string(pole.id);
             obj.x = pole.world_x;
@@ -588,7 +690,13 @@ private:
             obj.velocity_x = 0.0;
             obj.velocity_y = 0.0;
             poles_msg.objects.push_back(obj);
+            
+            RCLCPP_INFO(this->get_logger(), 
+                       "Pole %d: x=%.3f m, y=%.3f m, confidence=%.2f, detections=%d",
+                       pole.id, pole.world_x, pole.world_y, obj.confidence, pole.total_detections);
         }
+        
+        RCLCPP_INFO(this->get_logger(), "===========================");
         
         poles_pub_->publish(poles_msg);
         
@@ -599,19 +707,19 @@ private:
     }
 
     std::string input_topic_;
-    std::string output_cloud_topic_;
     double range_min_, range_max_;
     double z_min_, z_max_;
-    double voxel_leaf_size_;
     int cluster_min_size_, cluster_max_size_;
     double cluster_tolerance_;
-    bool publish_filtered_cloud_;
     bool detect_objects_;
 
     double pole_expected_radius_;
     double pole_radius_tolerance_;
-    double pole_min_distance_;
-    double pole_max_distance_;
+    double pole_min_intensity_;
+    double pole_intensity_ratio_;
+    int min_scans_to_accumulate_;
+    double accumulation_angle_threshold_;
+    
     std::vector<double> expected_distances_;
     double distance_match_tol_;
     bool enable_pattern_matching_;
@@ -621,7 +729,8 @@ private:
     double association_distance_;
     int max_invisible_frames_;
     bool enable_tracking_;
-    bool debug_mode_;
+    bool use_intensity_filtering_;
+    bool use_scan_accumulation_;
 
     std::vector<TrackedPole> tracked_poles_;
     int next_pole_id_;
@@ -630,9 +739,11 @@ private:
     bool has_odom_;
     std::mutex odom_mutex_;
 
+    pcl::PointCloud<pcl::PointXYZI>::Ptr scan_accumulator_;
+    int accumulation_count_;
+
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr cloud_sub_;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr cloud_pub_;
     rclcpp::Publisher<lslidar_msgs::msg::DetectedObjects>::SharedPtr objects_pub_;
     rclcpp::Publisher<lslidar_msgs::msg::DetectedObjects>::SharedPtr poles_pub_;
     rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr distance_matrix_pub_;

@@ -65,27 +65,27 @@ namespace lslidar_driver
 		pointcloud_topic = std::string("/lslidar_point_cloud");
 		is_start = true;
 		min_range = 0.0;
-		max_range = 10.0;
+		max_range = 0.8;
 		use_gps_ts = true;
 		compensation = true;
 		pubScan = true;
 		pubPointCloud2 = true;
-		angle_disable_min = 0.0;
-		angle_disable_max = 0.0;
+		angle_disable_min = 90.0;
+		angle_disable_max = 270.0;
 
 		this->declare_parameter<std::string>("lidar_name", "M10");
 		this->declare_parameter<std::string>("frame_id", "laser_link");
 		this->declare_parameter<std::string>("scan_topic", "/scan");
 		this->declare_parameter<std::string>("pointcloud_topic", "/lslidar_point_cloud");
 		this->declare_parameter<double>("min_range", 0.0);
-		this->declare_parameter<double>("max_range", 100.0);
+		this->declare_parameter<double>("max_range", 0.8);
 		this->declare_parameter<bool>("use_gps_ts", false);
 		this->declare_parameter<bool>("high_reflection", false);
 		this->declare_parameter<bool>("compensation", false);
 		this->declare_parameter<bool>("pubScan", false);
 		this->declare_parameter<bool>("pubPointCloud2", false);
-		this->declare_parameter<double>("angle_disable_min", 0.0);
-		this->declare_parameter<double>("angle_disable_max", 0.0);
+		this->declare_parameter<double>("angle_disable_min", 90.0);
+		this->declare_parameter<double>("angle_disable_max", 270.0);
 		this->declare_parameter<std::string>("interface_selection", "net");
 
 		this->get_parameter("lidar_name", lidar_name);
