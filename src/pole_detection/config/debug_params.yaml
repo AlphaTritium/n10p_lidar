@@ -1,0 +1,50 @@
+# Debug Configuration - All debug topics ENABLED for troubleshooting
+pole_detection:
+  ros__parameters:
+    # ========================================
+    # Preprocessor Parameters (same as production)
+    # ========================================
+    range_min: 0.2
+    range_max: 0.8
+    z_min: -0.3
+    z_max: 0.3
+    voxel_leaf_size: 0.01
+    use_intensity_filter: true
+    min_intensity: 50.0
+    
+    # ========================================
+    # Clusterer Parameters
+    # ========================================
+    cluster_tolerance: 0.05
+    cluster_min_size: 6
+    cluster_max_size: 100
+    
+    # ========================================
+    # validator Parameters
+    # ========================================
+    expected_radius: 0.028
+    radius_tolerance: 0.008
+    use_intensity_stats: true
+    
+    # ========================================
+    # Tracker Parameters
+    # ========================================
+    max_tracks: 6
+    association_distance: 0.15
+    max_invisible_frames: 20
+    
+    # ========================================
+    # Pattern Matcher Parameters
+    # ========================================
+    enable_pattern_matching: true
+    expected_inter_pole_distances: [0.185]
+    distance_match_tolerance: 0.03
+    
+    # ========================================
+    # Debug Publishing (ALL ON for debugging)
+    # ========================================
+    publish_debug_cloud: true           # Publish /debug/preprocessed_cloud
+    publish_debug_clusters: true        # Publish /debug/clusters_raw
+    publish_debug_validation: true      # Publish /debug/validated_poles, /debug/rejected_poles
+    publish_debug_tracks: true          # Publish /debug/tracks
+    publish_debug_pattern: true         # Publish /debug/distance_matrix, /debug/pattern_matches

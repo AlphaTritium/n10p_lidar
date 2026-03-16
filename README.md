@@ -157,7 +157,7 @@ ec.extract(cluster_indices);
 
 ---
 
-#### **Component 5: Cluster Validator**
+#### **Component 5: Cluster validator**
 **Function:** Applies multi-criteria validation to eliminate false positives.
 
 **Validation Pipeline:**

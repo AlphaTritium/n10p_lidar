@@ -1,0 +1,50 @@
+# Production Configuration - Optimized for performance, debug publishing OFF
+pole_detection:
+  ros__parameters:
+    # ========================================
+    # Preprocessor Parameters
+    # ========================================
+    range_min: 0.2              # Minimum detection range (m)
+    range_max: 0.8              # Maximum detection range (m)
+    z_min: -0.3                 # Minimum height filter (m)
+    z_max: 0.3                  # Maximum height filter (m)
+    voxel_leaf_size: 0.01       # Voxel grid downsampling (m)
+    use_intensity_filter: true  # Filter low-intensity points
+    min_intensity: 50.0         # Minimum intensity threshold
+    
+    # ========================================
+    # Clusterer Parameters
+    # ========================================
+    cluster_tolerance: 0.05     # Euclidean clustering tolerance (m)
+    cluster_min_size: 6         # Minimum points per cluster
+    cluster_max_size: 100       # Maximum points per cluster
+    
+    # ========================================
+    # validator Parameters
+    # ========================================
+    expected_radius: 0.028      # Expected pole radius (m)
+    radius_tolerance: 0.008     # Radius validation tolerance (m)
+    use_intensity_stats: true   # Use intensity in validation
+    
+    # ========================================
+    # Tracker Parameters
+    # ========================================
+    max_tracks: 6               # Maximum poles to track
+    association_distance: 0.15  # Association gate distance (m)
+    max_invisible_frames: 20    # Frames before track is stale
+    
+    # ========================================
+    # Pattern Matcher Parameters
+    # ========================================
+    enable_pattern_matching: true
+    expected_inter_pole_distances: [0.185]  # Expected distances between poles (m)
+    distance_match_tolerance: 0.03          # Pattern match tolerance (m)
+    
+    # ========================================
+    # Debug Publishing (ALL OFF for production)
+    # ========================================
+    publish_debug_cloud: false
+    publish_debug_clusters: false
+    publish_debug_validation: false
+    publish_debug_tracks: false
+    publish_debug_pattern: false
