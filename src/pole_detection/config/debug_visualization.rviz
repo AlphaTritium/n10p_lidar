@@ -1,0 +1,79 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+    Display Types:
+      - Class: rviz_default_plugins/PointCloud2
+        Name: Raw Point Cloud
+        Topic: /lslidar_point_cloud
+        Alpha: 1.0
+        Size: 0.01
+        Color: 255; 255; 255
+        Enabled: true
+        
+      - Class: rviz_default_plugins/PointCloud2
+        Name: Preprocessed Cloud
+        Topic: /debug/preprocessed_cloud
+        Alpha: 1.0
+        Size: 0.015
+        Color: 0; 255; 0
+        Enabled: true
+        
+      - Class: rviz_default_plugins/MarkerArray
+        Name: Raw Clusters
+        Topic: /debug/clusters_raw
+        Alpha: 1.0
+        Enabled: true
+        
+      - Class: rviz_default_plugins/MarkerArray
+        Name: Validated Poles
+        Topic: /debug/validated_poles
+        Alpha: 1.0
+        Color: 0; 255; 0
+        Enabled: true
+        
+      - Class: rviz_default_plugins/MarkerArray
+        Name: Rejected Poles
+        Topic: /debug/rejected_poles
+        Alpha: 1.0
+        Color: 255; 0; 0
+        Enabled: true
+        
+      - Class: rviz_default_plugins/MarkerArray
+        Name: Tracked Poles
+        Topic: /debug/tracks
+        Alpha: 1.0
+        Enabled: true
+        
+      - Class: rviz_default_plugins/MarkerArray
+        Name: Pattern Matches
+        Topic: /debug/pattern_matches
+        Alpha: 1.0
+        Enabled: true
+        
+      - Class: rviz_default_plugins/MarkerArray
+        Name: Final Output
+        Topic: /pole_markers
+        Alpha: 1.0
+        Color: 0; 255; 255
+        Enabled: true
+        
+  - Class: rviz_common/Views
+    Name: Views
+    Current View: Orbit
+  
+  - Class: rviz_common/Time
+    Name: Time
+
+Visualization Manager:
+  Global Options:
+    Fixed Frame: laser_link
+    Frame Rate: 30
+    
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusOnMiddle
+
+Window Geometry:
+  width: 1920
+  height: 1080

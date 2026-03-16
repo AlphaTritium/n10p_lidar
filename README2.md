@@ -21,8 +21,8 @@ lslidar_driver → /lslidar_point_cloud
 Here's the revamped structure that maintains backward compatibility while adding modularity:
 
 ```
-pole_detection/
-├── include/pole_detection/
+
+├── include/
 │   ├── types.hpp               # Shared type definitions (PoleCandidate, TrackedPole, etc.)
 │   ├── preprocessor.hpp        # Cloud filtering & preprocessing
 │   ├── clusterer.hpp           # Euclidean clustering
@@ -111,7 +111,7 @@ Let me create the complete refactored codebase. I'll start with the core modules
 ### **Step 1: Shared Types Header**
 
 ```cpp
-// include/pole_detection/types.hpp
+// include/types.hpp
 #ifndef POLE_DETECTION__TYPES_HPP_
 #define POLE_DETECTION__TYPES_HPP_
 
@@ -187,7 +187,7 @@ struct ClusterDebugInfo
 ### **Step 2: Preprocessor Module**
 
 ```cpp
-// include/pole_detection/preprocessor.hpp
+// include/preprocessor.hpp
 #ifndef POLE_DETECTION__PREPROCESSOR_HPP_
 #define POLE_DETECTION__PREPROCESSOR_HPP_
 
@@ -236,7 +236,7 @@ private:
 
 ```cpp
 // src/preprocessor.cpp
-#include "pole_detection/preprocessor.hpp"
+#include "preprocessor.hpp"
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/passthrough.h>
@@ -325,11 +325,11 @@ void Preprocessor::publishDebug(
 ### **Step 3: Clusterer Module**
 
 ```cpp
-// include/pole_detection/clusterer.hpp
+// include/clusterer.hpp
 #ifndef POLE_DETECTION__CLUSTERER_HPP_
 #define POLE_DETECTION__CLUSTERER_HPP_
 
-#include "pole_detection/types.hpp"
+#include "types.hpp"
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -371,20 +371,20 @@ private:
 #endif  // POLE_DETECTION__CLUSTERER_HPP_
 ```
 
-### **Step 4: Validator Module**
+### **Step 4: validator Module**
 
 ```cpp
-// include/pole_detection/validator.hpp
-#ifndef POLE_DETECTION__VALIDATOR_HPP_
-#define POLE_DETECTION__VALIDATOR_HPP_
+// include/validator.hpp
+#ifndef POLE_DETECTION__validator_HPP_
+#define POLE_DETECTION__validator_HPP_
 
-#include "pole_detection/types.hpp"
+#include "types.hpp"
 #include <vector>
 
 namespace pole_detection
 {
 
-class Validator
+class validator
 {
 public:
   struct Config {
@@ -397,7 +397,7 @@ public:
     bool publish_debug = false;
   };
   
-  explicit Validator(rclcpp::Node::SharedPtr node, const Config& config = Config());
+  explicit validator(rclcpp::Node::SharedPtr node, const Config& config = Config());
   
   std::vector<PoleCandidate> validate(
     const std::vector<PoleCandidate>& candidates,
@@ -423,17 +423,17 @@ private:
 
 }  // namespace pole_detection
 
-#endif  // POLE_DETECTION__VALIDATOR_HPP_
+#endif  // POLE_DETECTION__validator_HPP_
 ```
 
 ### **Step 5: Tracker Module**
 
 ```cpp
-// include/pole_detection/tracker.hpp
+// include/tracker.hpp
 #ifndef POLE_DETECTION__TRACKER_HPP_
 #define POLE_DETECTION__TRACKER_HPP_
 
-#include "pole_detection/types.hpp"
+#include "types.hpp"
 #include <vector>
 #include <unordered_map>
 
@@ -480,14 +480,14 @@ private:
 ### **Step 6: Main Node (Orchestrator)**
 
 ```cpp
-// include/pole_detection/pole_detection_node.hpp
+// include/pole_detection_node.hpp
 #ifndef POLE_DETECTION__POLE_DETECTION_NODE_HPP_
 #define POLE_DETECTION__POLE_DETECTION_NODE_HPP_
 
-#include "pole_detection/preprocessor.hpp"
-#include "pole_detection/clusterer.hpp"
-#include "pole_detection/validator.hpp"
-#include "pole_detection/tracker.hpp"
+#include "preprocessor.hpp"
+#include "clusterer.hpp"
+#include "validator.hpp"
+#include "tracker.hpp"
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <lslidar_msgs/msg/detected_objects.hpp>
@@ -511,7 +511,7 @@ private:
   // Pipeline modules
   std::unique_ptr<Preprocessor> preprocessor_;
   std::unique_ptr<Clusterer> clusterer_;
-  std::unique_ptr<Validator> validator_;
+  std::unique_ptr<validator> validator_;
   std::unique_ptr<Tracker> tracker_;
   
   // Callbacks
@@ -528,7 +528,7 @@ private:
 
 ```cpp
 // src/pole_detection_node.cpp
-#include "pole_detection/pole_detection_node.hpp"
+#include "pole_detection_node.hpp"
 #include <pcl_conversions/pcl_conversions.h>
 
 namespace pole_detection
@@ -551,7 +551,7 @@ PoleDetectionNode::PoleDetectionNode()
     "/detected_poles", 10);
   
   RCLCPP_INFO(get_logger(), "Pole Detection Node initialized");
-  RCLCPP_INFO(get_logger(), "Pipeline: Preprocessor → Clusterer → Validator → Tracker");
+  RCLCPP_INFO(get_logger(), "Pipeline: Preprocessor → Clusterer → validator → Tracker");
 }
 
 void PoleDetectionNode::cloudCallback(
@@ -638,8 +638,8 @@ void PoleDetectionNode::loadParameters()
   
   clusterer_ = std::make_unique<Clusterer>(shared_from_this(), cluster_config);
   
-  // Validator parameters
-  Validator::Config validator_config;
+  // validator parameters
+  validator::Config validator_config;
   declare_parameter("expected_radius", 0.028);
   declare_parameter("radius_tolerance", 0.008);
   declare_parameter("publish_debug_validation", false);
@@ -648,7 +648,7 @@ void PoleDetectionNode::loadParameters()
   validator_config.radius_tolerance = get_parameter("radius_tolerance").as_double();
   validator_config.publish_debug = get_parameter("publish_debug_validation").as_bool();
   
-  validator_ = std::make_unique<Validator>(shared_from_this(), validator_config);
+  validator_ = std::make_unique<validator>(shared_from_this(), validator_config);
   
   // Tracker parameters
   Tracker::Config tracker_config;
@@ -818,7 +818,7 @@ pole_detection:
     cluster_min_size: 6
     cluster_max_size: 100
     
-    # Validator
+    # validator
     expected_radius: 0.028
     radius_tolerance: 0.008
     
@@ -890,7 +890,7 @@ The action server (`action_server.cpp`) simply:
 6. **Remove old monolithic code** after validation
 
 Would you like me to:
-1. Complete the implementation of all modules (Clusterer, Validator, Tracker)?
+1. Complete the implementation of all modules (Clusterer, validator, Tracker)?
 2. Create the action server that works with the new architecture?
 3. Set up the CMakeLists.txt and package.xml?
 4. Create example RViz configurations for debug mode?
