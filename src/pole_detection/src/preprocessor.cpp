@@ -11,12 +11,12 @@ Preprocessor::Preprocessor(rclcpp::Node::SharedPtr node, const Config& config)
   : node_(node), config_(config)
 {
   // Only create publisher if debug is explicitly enabled
-  if (config_.publish_debug_cloud) {
-    debug_pub_ = node_->create_publisher<sensor_msgs::msg::PointCloud2>(
-      "/debug/preprocessed_cloud", 10);
+  // if (config_.publish_debug_cloud) {
+  //   debug_pub_ = node_->create_publisher<sensor_msgs::msg::PointCloud2>(
+  //    "/debug/preprocessed_cloud", 10);
     RCLCPP_INFO(node_->get_logger(), "Preprocessor debug publishing ENABLED");
-  }
 }
+
 
 pcl::PointCloud<pcl::PointXYZI>::Ptr Preprocessor::process(
   const sensor_msgs::msg::PointCloud2::ConstSharedPtr& input)
@@ -27,7 +27,30 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr Preprocessor::process(
   
   // Convert to PCL
   pcl::PointCloud<pcl::PointXYZI>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZI>);
-  pcl::fromROSMsg(*input, *cloud);
+  try {
+    pcl::fromROSMsg(*input, *cloud);
+  } catch (const std::exception& e) {
+    RCLCPP_WARN(node_->get_logger(), "Point cloud conversion warning: %s", e.what());
+    RCLCPP_WARN(node_->get_logger(), "Attempting to read point cloud without intensity field...");
+    
+    // Fallback: try to convert as PointXYZ
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_xyz(new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::fromROSMsg(*input, *cloud_xyz);
+    
+    // Convert to PointXYZI with zero intensity
+    cloud->header = cloud_xyz->header;
+    cloud->width = cloud_xyz->width;
+    cloud->height = cloud_xyz->height;
+    cloud->is_dense = cloud_xyz->is_dense;
+    cloud->points.resize(cloud_xyz->points.size());
+    
+    for (size_t i = 0; i < cloud_xyz->points.size(); ++i) {
+      cloud->points[i].x = cloud_xyz->points[i].x;
+      cloud->points[i].y = cloud_xyz->points[i].y;
+      cloud->points[i].z = cloud_xyz->points[i].z;
+      cloud->points[i].intensity = 0.0;  // Default intensity
+    }
+  }
   
   // Apply passthrough filters
   pcl::PointCloud<pcl::PointXYZI>::Ptr filtered(new pcl::PointCloud<pcl::PointXYZI>);
@@ -55,6 +78,11 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr Preprocessor::process(
     }
   }
   
+  RCLCPP_DEBUG(node_->get_logger(), 
+    "Filtered from %zu to %zu points (removed %zu)", 
+    cloud->points.size(), filtered->points.size(), 
+    cloud->points.size() - filtered->points.size());
+
   // Voxel grid downsampling
   if (config_.voxel_leaf_size > 0.0) {
     pcl::PointCloud<pcl::PointXYZI>::Ptr voxelize(new pcl::PointCloud<pcl::PointXYZI>);
@@ -63,16 +91,20 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr Preprocessor::process(
     voxel.setLeafSize(config_.voxel_leaf_size, config_.voxel_leaf_size, config_.voxel_leaf_size);
     voxel.filter(*voxelize);
     filtered = voxelize;
+
+    RCLCPP_DEBUG(node_->get_logger(), 
+      "After voxel filtering: %zu points", filtered->points.size());
   }
   
   // Publish debug if enabled
-  if (config_.publish_debug_cloud && debug_pub_) {
-    publishDebug(*filtered, input->header);
-  }
+  // if (config_.publish_debug_cloud && debug_pub_) {
+  //   publishDebug(*filtered, input->header);
+  //}
   
   return filtered;
 }
 
+/**
 void Preprocessor::publishDebug(
   const pcl::PointCloud<pcl::PointXYZI>& cloud,
   const std_msgs::msg::Header& header)
@@ -82,5 +114,6 @@ void Preprocessor::publishDebug(
   msg.header = header;
   debug_pub_->publish(msg);
 }
+*/
 
 }  // namespace pole_detection

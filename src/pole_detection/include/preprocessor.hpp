@@ -21,7 +21,7 @@ public:
     double voxel_leaf_size;
     bool use_intensity_filter;
     double min_intensity;
-    bool publish_debug_cloud;
+    // bool publish_debug_cloud;
     
     Config()
       : range_min(0.0)
@@ -31,7 +31,7 @@ public:
       , voxel_leaf_size(0.001)
       , use_intensity_filter(true)
       , min_intensity(50.0)
-      , publish_debug_cloud(false)
+      // , publish_debug_cloud(false)
     {}
   };
   
@@ -44,13 +44,13 @@ public:
   const Config& getConfig() const { return config_; }
 
 private:
-  void publishDebug(
-    const pcl::PointCloud<pcl::PointXYZI>& cloud,
-    const std_msgs::msg::Header& header);
+  // void publishDebug(
+    // const pcl::PointCloud<pcl::PointXYZI>& cloud,
+    // const std_msgs::msg::Header& header);
   
   rclcpp::Node::SharedPtr node_;
   Config config_;
-  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr debug_pub_;
+  // rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr debug_pub_;
 };
 
 }  // namespace pole_detection

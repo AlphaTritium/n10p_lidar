@@ -58,7 +58,7 @@ add_definitions(${PCL_DEFINITIONS})
 # ============================================
 add_executable(pole_detection_node
   src/pole_detection_node.cpp
-  src/preprocessor.cpp
+  # src/preprocessor.cpp
   src/clusterer.cpp
   src/validator.cpp
   src/tracker.cpp
