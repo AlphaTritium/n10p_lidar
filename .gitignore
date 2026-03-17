@@ -1,4 +1,12 @@
+<<<<<<< HEAD
 build/
 install/
 log/
 backup/
+=======
+
+build/
+install/
+backup
+log/
+>>>>>>> c605b36ad1599a38c31bf11b029c783536b3a233
