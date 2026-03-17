@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # **COMPREHENSIVE TECHNICAL REPORT: LiDAR Pole Detection System**
 
 ## **📑 Document Information**
@@ -1036,3 +1037,6 @@ The modular architecture allows easy extension for future enhancements including
 
 **Document Version:** 2.0  
 **Last Updated:** March 13, 2026  
+=======
+# n10p_lidar
+>>>>>>> c605b36ad1599a38c31bf11b029c783536b3a233
