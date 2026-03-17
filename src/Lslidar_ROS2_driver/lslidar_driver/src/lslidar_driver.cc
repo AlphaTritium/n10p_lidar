@@ -412,8 +412,8 @@ namespace lslidar_driver
 	{
 		diagnostics.setHardwareID("Lslidar");
 		int code = 0;
-		serial_port_ = std::string("/dev/ttyUSB0");
-		this->declare_parameter<std::string>("serial_port_", "/dev/ttyUSB0");
+		serial_port_ = std::string("/dev/ttyACM0");
+		this->declare_parameter<std::string>("serial_port_", "/dev/ttyACM0");
 		this->get_parameter("serial_port_", serial_port_);
 		serial_ = LSIOSR::instance(serial_port_, baud_rate_);
 		    

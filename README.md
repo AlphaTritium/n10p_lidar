@@ -24,7 +24,7 @@ This document provides a complete technical analysis of the LiDAR-based pole det
 ### **1.3 System Capabilities**
 1. Detects poles with radius ~28mm (±8mm tolerance)
 2. Tracks up to 6 poles simultaneously
-3. Validates pole patterns against known configurations
+3. validates pole patterns against known configurations
 4. Publishes positions, distances, and visualizations
 5. Provides comprehensive logging for debugging
 
@@ -67,7 +67,7 @@ This document provides a complete technical analysis of the LiDAR-based pole det
 │  └────────┬──────────┘                                      │
 │           │                                                  │
 │  ┌────────▼──────────┐                                      │
-│  │ 5. Validation     │ Radius, Size, Intensity Stats         │
+│  │ 5. validation     │ Radius, Size, Intensity Stats         │
 │  └────────┬──────────┘                                      │
 │           │                                                  │
 │  ┌────────▼──────────┐                                      │
@@ -75,7 +75,7 @@ This document provides a complete technical analysis of the LiDAR-based pole det
 │  └────────┬──────────┘                                      │
 │           │                                                  │
 │  ┌────────▼──────────┐                                      │
-│  │ 7. Pattern Match  │ Inter-pole Distance Validation        │
+│  │ 7. Pattern Match  │ Inter-pole Distance validation        │
 │  └───────────────────┘                                      │
 └─────────────────────────────────────────────────────────────┘
          │
@@ -160,7 +160,7 @@ ec.extract(cluster_indices);
 #### **Component 5: Cluster validator**
 **Function:** Applies multi-criteria validation to eliminate false positives.
 
-**Validation Pipeline:**
+**validation Pipeline:**
 
 | Criterion | Check | Rationale |
 |-----------|-------|-----------|
@@ -208,7 +208,7 @@ confidence = min(1.0, total_detections / 20.0)
 ---
 
 #### **Component 7: Pattern Matcher**
-**Function:** Validates detected pole configuration against known robot geometry.
+**Function:** validates detected pole configuration against known robot geometry.
 
 **Use Case:** Robot has 2 poles at fixed distance (e.g., 185mm apart)
 
@@ -272,7 +272,7 @@ estimated_radius = avg_radial_dist × 1.15  // Correction factor
 σ = √[(1/N) × Σᵢ (intensityᵢ - μ)²]
 ```
 
-**Validation Criterion:**
+**validation Criterion:**
 ```
 σ ≤ 0.5 × μ  (Uniform material property)
 ```
@@ -378,7 +378,7 @@ x_smoothed[k] = α × x_smoothed[k-1] + (1-α) × x_measured[k]
 | Accumulation | O(m) | 0.2ms | m = accumulated points |
 | Kd-tree Build | O(n log n) | 2.0ms | **Primary bottleneck** |
 | Cluster Extraction | O(n log n) | 5.0ms | Search operations |
-| Validation | O(k × m) | 1.5ms | k = clusters, m = points/cluster |
+| validation | O(k × m) | 1.5ms | k = clusters, m = points/cluster |
 | Association | O(p × d) | 0.5ms | p = poles, d = detections |
 | Publishing | O(p) | 0.2ms | - |
 | **Total** | - | **~10-15ms** | - |
@@ -515,7 +515,7 @@ markers:
 [DEBUG] [lidar_pointcloud_processor]: Filtered from 3245 to 892 points
 [DEBUG] [lidar_pointcloud_processor]: Clustering extracted 18 clusters
 [DEBUG] [lidar_pointcloud_processor]: Cluster too small: 4 points
-[DEBUG] [lidar_pointcloud_processor]: Valid pole: (0.450, -0.120) r=0.029 intensity=127.5
+[DEBUG] [lidar_pointcloud_processor]: valid pole: (0.450, -0.120) r=0.029 intensity=127.5
 [DEBUG] [lidar_pointcloud_processor]: Pole rejected: radius error 0.015 > tolerance 0.008
 [DEBUG] [lidar_pointcloud_processor]: Accumulated scan 2/3
 [DEBUG] [lidar_pointcloud_processor]: Publishing 3 tracked poles
@@ -837,7 +837,7 @@ ros2 topic echo /lslidar_point_cloud | grep intensity
 # Example: If pole intensities range 80-200, set threshold to 50
 ```
 
-**Step 3: Cluster Validation**
+**Step 3: Cluster validation**
 ```bash
 # Enable DEBUG logging
 ros2 run sim lidar_pointcloud_processor --ros-args --log-level debug
@@ -936,7 +936,7 @@ lidar_processor:
     cluster_tolerance: 0.05
     detect_objects: true
     
-    # Pole Validation
+    # Pole validation
     pole_expected_radius: 0.028
     pole_radius_tolerance: 0.008
     pole_min_intensity: 50.0
@@ -1014,7 +1014,7 @@ ament_package()
 | **Data Association** | Matching detections to existing tracks |
 | **Exponential Smoothing** | First-order low-pass filter for noise reduction |
 | **Scan Accumulation** | Multi-scan fusion for increased density |
-| **Pattern Matching** | Validation against known geometric configuration |
+| **Pattern Matching** | validation against known geometric configuration |
 | **Gating** | Threshold-based association validation |
 | **RMSE** | Root Mean Square Error (position accuracy metric) |
 

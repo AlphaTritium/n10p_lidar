@@ -10,6 +10,7 @@ namespace pole_detection
 Preprocessor::Preprocessor(rclcpp::Node::SharedPtr node, const Config& config)
   : node_(node), config_(config)
 {
+  // Only create publisher if debug is explicitly enabled
   if (config_.publish_debug_cloud) {
     debug_pub_ = node_->create_publisher<sensor_msgs::msg::PointCloud2>(
       "/debug/preprocessed_cloud", 10);

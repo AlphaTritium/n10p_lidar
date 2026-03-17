@@ -24,18 +24,18 @@ public:
     bool publish_debug_cloud;
     
     Config()
-      : range_min(0.2)
+      : range_min(0.0)
       , range_max(0.8)
       , z_min(-0.3)
       , z_max(0.3)
-      , voxel_leaf_size(0.01)
+      , voxel_leaf_size(0.001)
       , use_intensity_filter(true)
       , min_intensity(50.0)
       , publish_debug_cloud(false)
     {}
   };
   
-  explicit Preprocessor(rclcpp::Node::SharedPtr node, const Config& config = Config());
+  explicit Preprocessor(rclcpp::Node::SharedPtr node, const Config& config);
   
   pcl::PointCloud<pcl::PointXYZI>::Ptr process(
     const sensor_msgs::msg::PointCloud2::ConstSharedPtr& input);
@@ -44,11 +44,13 @@ public:
   const Config& getConfig() const { return config_; }
 
 private:
+  void publishDebug(
+    const pcl::PointCloud<pcl::PointXYZI>& cloud,
+    const std_msgs::msg::Header& header);
+  
   rclcpp::Node::SharedPtr node_;
   Config config_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr debug_pub_;
-  
-  void publishDebug(const pcl::PointCloud<pcl::PointXYZI>& cloud, const std_msgs::msg::Header& header);
 };
 
 }  // namespace pole_detection
