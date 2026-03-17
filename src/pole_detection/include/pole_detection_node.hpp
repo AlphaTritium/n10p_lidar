@@ -8,6 +8,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <lslidar_msgs/msg/detected_objects.hpp>
+#include <memory>
 
 namespace pole_detection
 {
@@ -16,8 +17,12 @@ class PoleDetectionNode : public rclcpp::Node
 {
 public:
   PoleDetectionNode();
-  
+
 private:
+  void cloudCallback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr& msg);
+  void ensureModulesInitialized();
+  void initializeModules();
+  
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr cloud_sub_;
   rclcpp::Publisher<lslidar_msgs::msg::DetectedObjects>::SharedPtr objects_pub_;
   rclcpp::Publisher<lslidar_msgs::msg::DetectedObjects>::SharedPtr poles_pub_;
@@ -27,8 +32,7 @@ private:
   std::unique_ptr<validator> validator_;
   std::unique_ptr<Tracker> tracker_;
   
-  void cloudCallback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr& msg);
-  void loadParameters();
+  bool modules_initialized_ = false;
 };
 
 }  // namespace pole_detection

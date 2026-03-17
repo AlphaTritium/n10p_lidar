@@ -568,9 +568,9 @@ void PoleDetectionNode::cloudCallback(
   auto candidates = clusterer_->extractClusters(preprocessed, msg->header);
   RCLCPP_DEBUG(get_logger(), "Extracted %zu cluster candidates", candidates.size());
   
-  // Stage 3: Validation
+  // Stage 3: validation
   auto validated = validator_->validate(candidates, preprocessed);
-  RCLCPP_DEBUG(get_logger(), "Validated %zu poles", validated.size());
+  RCLCPP_DEBUG(get_logger(), "validated %zu poles", validated.size());
   
   // Stage 4: Tracking
   auto tracked = tracker_->update(validated, msg->header);
@@ -689,7 +689,7 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     return LaunchDescription([
-        DeclareLaunchArgument('serial_port', default_value='/dev/ttyUSB0'),
+        DeclareLaunchArgument('serial_port', default_value='/dev/ttyACM0'),
         
         # LiDAR Driver
         Node(
@@ -743,7 +743,7 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     return LaunchDescription([
-        DeclareLaunchArgument('serial_port', default_value='/dev/ttyUSB0'),
+        DeclareLaunchArgument('serial_port', default_value='/dev/ttyACM0'),
         DeclareLaunchArgument('start_rviz', default_value='true'),
         
         # LiDAR Driver

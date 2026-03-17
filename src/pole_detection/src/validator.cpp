@@ -51,7 +51,7 @@ std::vector<PoleCandidate> validator::validate(
     
     if (is_valid) {
       validated.push_back(validated_candidate);
-      RCLCPP_DEBUG(node_->get_logger(), "✓ Pole %d VALIDATED: r=%.3f, intensity=%.1f",
+      RCLCPP_DEBUG(node_->get_logger(), "✓ Pole %d validATED: r=%.3f, intensity=%.1f",
                   candidate.id, candidate.radius, candidate.avg_intensity);
     } else {
       rejected.push_back(validated_candidate);
@@ -60,7 +60,7 @@ std::vector<PoleCandidate> validator::validate(
     }
   }
   
-  RCLCPP_DEBUG(node_->get_logger(), "Validation: %zu accepted, %zu rejected",
+  RCLCPP_DEBUG(node_->get_logger(), "validation: %zu accepted, %zu rejected",
               validated.size(), rejected.size());
   
   return validated;
