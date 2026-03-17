@@ -47,6 +47,10 @@ private:
   bool validateRadius(const PoleCandidate& candidate);
   bool validateIntensity(const PoleCandidate& candidate, const pcl::PointXYZI& cluster);
   bool validateShape(const PoleCandidate& candidate, const pcl::PointXYZI& cluster);
+  void publishDebugMarkers(
+    const std::vector<PoleCandidate>& accepted,
+    const std::vector<PoleCandidate>& rejected,
+    const rclcpp::Time& timestamp);
 };
 
 }  // namespace pole_detection
