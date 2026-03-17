@@ -8,23 +8,22 @@ pole_detection:
     range_max: 0.8
     z_min: -0.3
     z_max: 0.3
-    voxel_leaf_size: 0.01
-    use_intensity_filter: true
-    min_intensity: 50.0
+    voxel_leaf_size: 0.0001
+    use_intensity_filter: false
     
     # ========================================
     # Clusterer Parameters
     # ========================================
-    cluster_tolerance: 0.05
-    cluster_min_size: 6
-    cluster_max_size: 100
+    cluster_tolerance: 0.005
+    cluster_min_size: 4
+    cluster_max_size: 50
     
     # ========================================
     # validator Parameters
     # ========================================
-    expected_radius: 0.028
-    radius_tolerance: 0.008
-    use_intensity_stats: true
+    expected_radius: 0.024
+    radius_tolerance: 0.002
+    use_intensity_stats: false
     
     # ========================================
     # Tracker Parameters
@@ -38,7 +37,7 @@ pole_detection:
     # ========================================
     enable_pattern_matching: true
     expected_inter_pole_distances: [0.185]
-    distance_match_tolerance: 0.03
+    distance_match_tolerance: 0.05
     
     # ========================================
     # Debug Publishing (ALL ON for debugging)

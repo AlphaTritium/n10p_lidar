@@ -97,7 +97,7 @@ def generate_launch_description():
             name='rviz2',
             arguments=['-d', PathJoinSubstitution([
                 FindPackageShare('pole_detection'),
-                'rviz',
+                'config',
                 'debug_visualization.rviz'
             ])],
             condition=IfCondition(LaunchConfiguration('start_rviz')),
