@@ -42,7 +42,7 @@ pole_detection:
     # ========================================
     # Debug Publishing (ALL ON for debugging)
     # ========================================
-    publish_debug_cloud: true           # Publish /debug/preprocessed_cloud
+    # publish_debug_cloud: false           # Publish /debug/preprocessed_cloud
     publish_debug_clusters: true        # Publish /debug/clusters_raw
     publish_debug_validation: true      # Publish /debug/validated_poles, /debug/rejected_poles
     publish_debug_tracks: true          # Publish /debug/tracks

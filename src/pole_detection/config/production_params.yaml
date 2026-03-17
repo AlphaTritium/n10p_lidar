@@ -43,7 +43,7 @@ pole_detection:
     # ========================================
     # Debug Publishing (ALL OFF for production)
     # ========================================
-    publish_debug_cloud: false
+    # publish_debug_cloud: false
     publish_debug_clusters: false
     publish_debug_validation: false
     publish_debug_tracks: false
