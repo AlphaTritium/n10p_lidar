@@ -3,8 +3,8 @@
 
 #include "types.hpp"
 #include <rclcpp/rclcpp.hpp>
-#include <std_msgs/msg/float32_multi_array.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
+#include <std_msgs/msg/float32_multi_array.hpp>
 #include <vector>
 #include <map>
 
@@ -16,19 +16,25 @@ struct PatternMatchResult
   int matches;
   int total_pairs;
   double match_ratio;
+  std::vector<std::pair<int, int>> matched_pairs;  // Track which pairs matched
+  std::map<std::pair<int, int>, int> matched_harmonics;  // Which harmonic matched (1×, 2×, etc.)
 };
 
 class PatternMatcher
 {
 public:
   struct Config {
-    std::vector<double> expected_distances;
+    std::vector<double> expected_distances;  // Base distances (e.g., [0.185])
     double distance_tolerance;
+    bool enable_harmonics;  // Match multiples: 1×, 2×, 3× base distance
+    int max_harmonic;       // Maximum harmonic to check (default: 3)
     bool publish_debug;
     
     Config()
       : expected_distances({0.185})
       , distance_tolerance(0.03)
+      , enable_harmonics(true)
+      , max_harmonic(3)
       , publish_debug(false)
     {}
   };

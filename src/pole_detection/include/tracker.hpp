@@ -16,12 +16,14 @@ public:
     int max_tracks;
     double association_distance;
     int max_invisible_frames;
+    int confirmation_threshold;
     bool publish_debug_tracks;
     
     Config()
       : max_tracks(6)
       , association_distance(0.15)
       , max_invisible_frames(20)
+      , confirmation_threshold(3)
       , publish_debug_tracks(false)
     {}
   };

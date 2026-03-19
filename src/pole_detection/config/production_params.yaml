@@ -22,7 +22,7 @@ pole_detection:
     # ========================================
     # validator Parameters
     # ========================================
-    expected_radius: 0.028      # Expected pole radius (m)
+    expected_radius: 0.024      # Expected pole radius (m)
     radius_tolerance: 0.008     # Radius validation tolerance (m)
     use_intensity_stats: true   # Use intensity in validation
     
@@ -38,7 +38,7 @@ pole_detection:
     # ========================================
     enable_pattern_matching: true
     expected_inter_pole_distances: [0.185]  # Expected distances between poles (m)
-    distance_match_tolerance: 0.03          # Pattern match tolerance (m)
+    distance_match_tolerance: 0.025         # Pattern match tolerance (m)
     
     # ========================================
     # Debug Publishing (ALL OFF for production)

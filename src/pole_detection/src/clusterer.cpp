@@ -3,6 +3,8 @@
 #include <pcl/search/kdtree.h>
 #include <pcl/common/centroid.h>
 #include <pcl_conversions/pcl_conversions.h>
+#include <cmath>
+#include <algorithm>
 
 namespace pole_detection
 {
@@ -45,7 +47,7 @@ std::vector<PoleCandidate> Clusterer::extractClusters(
     
     RCLCPP_DEBUG(node_->get_logger(), "Extracted %zu raw clusters", cluster_indices.size());
     
-    // Convert each cluster to a PoleCandidate
+    // Convert each cluster to a PoleCandidate with enhanced features
     int candidate_id = 0;
     for (const auto& indices : cluster_indices) {
       if (indices.indices.empty()) continue;
@@ -58,45 +60,39 @@ std::vector<PoleCandidate> Clusterer::extractClusters(
         }
       }
       
-      // Compute centroid
+      // Compute centroid (x,y only for 2D LiDAR)
       pcl::PointXYZI centroid_3d;
       pcl::computeCentroid(*cluster_cloud, centroid_3d);
       
-      // Estimate radius (average distance from centroid)
-      double sum_dist = 0.0;
-      double max_dist = 0.0;
-      double intensity_sum = 0.0;
+      geometry_msgs::msg::Point centroid;
+      centroid.x = centroid_3d.x;
+      centroid.y = centroid_3d.y;
+      centroid.z = 0.0;  // Ignore z for 2D LiDAR
       
-      for (const auto& pt : cluster_cloud->points) {
-        double dx = pt.x - centroid_3d.x;
-        double dy = pt.y - centroid_3d.y;
-        double dist = std::hypot(dx, dy);
-        sum_dist += dist;
-        if (dist > max_dist) max_dist = dist;
-        intensity_sum += pt.intensity;
-      }
-      
-      double avg_dist = cluster_cloud->empty() ? 0.0 : sum_dist / cluster_cloud->size();
-      double avg_intensity = cluster_cloud->empty() ? 0.0 : intensity_sum / cluster_cloud->size();
+      // NEW: Extract arc-based features
+      ClusterFeatures features = extractArcFeatures(*cluster_cloud, centroid);
+      features.id = candidate_id;
+      features.legacy_radius = 1.0 / (features.curvature_estimate + 1e-6);
       
       // Create candidate
       PoleCandidate candidate;
       candidate.id = candidate_id++;
-      candidate.centroid.x = centroid_3d.x;
-      candidate.centroid.y = centroid_3d.y;
-      candidate.centroid.z = centroid_3d.z;
-      candidate.radius = avg_dist * 1.15;  // Scale factor to estimate true radius
+      candidate.features = features;
+      candidate.centroid = centroid;
       candidate.point_count = cluster_cloud->size();
-      candidate.avg_intensity = avg_intensity;
+      candidate.avg_intensity = features.avg_intensity;
+      candidate.radius = features.legacy_radius;  // For backward compatibility
       candidate.timestamp = node_->now();
-      candidate.rejection_reason = "";  // Not rejected yet
-      
-      candidates.push_back(candidate);
+      candidate.rejection_reason = "";
+      candidate.likelihood_score = 1.0;  // Will be set by validator
       
       RCLCPP_DEBUG(node_->get_logger(),
-        "Cluster %d: pts=%d, r=%.3f, pos=(%.3f, %.3f), intensity=%.1f",
-        candidate.id, candidate.point_count, candidate.radius,
-        candidate.centroid.x, candidate.centroid.y, candidate.avg_intensity);
+        "Cluster %d: pts=%d, arc=%.3fm, ang=%.1f°, width=%.3fm, r=%.3fm",
+        candidate.id, candidate.point_count, 
+        features.arc_length, features.angular_span,
+        features.radial_width, features.legacy_radius);
+      
+      candidates.push_back(candidate);
     }
     
     // Publish debug markers if enabled
@@ -111,6 +107,138 @@ std::vector<PoleCandidate> Clusterer::extractClusters(
   return candidates;
 }
 
+ClusterFeatures Clusterer::extractArcFeatures(
+  const pcl::PointCloud<pcl::PointXYZI>& cluster_points,
+  const geometry_msgs::msg::Point& centroid)
+{
+  ClusterFeatures features;
+  
+  // Sort points by angle around centroid
+  pcl::PointCloud<pcl::PointXYZI> sorted_points = cluster_points;
+  sortPointsByAngle(sorted_points, centroid);
+  
+  // Compute arc length
+  features.arc_length = computeArcLength(sorted_points);
+  
+  // Compute angular span
+  features.angular_span = computeAngularSpan(sorted_points, centroid);
+  
+  // Compute radial width (thickness proxy)
+  features.radial_width = computeRadialWidth(sorted_points);
+  
+  // Fit circle to estimate curvature
+  features.curvature_estimate = fitCircleCurvature(sorted_points);
+  
+  // Compute range from sensor (assume sensor at origin)
+  features.range_from_sensor = std::hypot(centroid.x, centroid.y);
+  
+  // Intensity statistics
+  double sum_intensity = 0.0;
+  for (const auto& pt : cluster_points) {
+    sum_intensity += pt.intensity;
+  }
+  features.avg_intensity = cluster_points.empty() ? 0.0 : sum_intensity / cluster_points.size();
+  
+  // Intensity variance (optional, can be added later)
+  features.intensity_variance = 0.0;
+  
+  // Point count
+  features.point_count = cluster_points.size();
+  
+  // Centroid
+  features.centroid = centroid;
+  
+  return features;
+}
+
+void Clusterer::sortPointsByAngle(
+  pcl::PointCloud<pcl::PointXYZI>& points,
+  const geometry_msgs::msg::Point& centroid)
+{
+  std::sort(points.begin(), points.end(),
+    [centroid](const pcl::PointXYZI& a, const pcl::PointXYZI& b) {
+      double angle_a = atan2(a.y - centroid.y, a.x - centroid.x);
+      double angle_b = atan2(b.y - centroid.y, b.x - centroid.x);
+      return angle_a < angle_b;
+    });
+}
+
+double Clusterer::computeArcLength(const pcl::PointCloud<pcl::PointXYZI>& sorted_points)
+{
+  if (sorted_points.size() < 2) return 0.0;
+  
+  double total_length = 0.0;
+  for (size_t i = 0; i < sorted_points.size() - 1; ++i) {
+    double dx = sorted_points[i+1].x - sorted_points[i].x;
+    double dy = sorted_points[i+1].y - sorted_points[i].y;
+    total_length += std::hypot(dx, dy);
+  }
+  
+  return total_length;
+}
+
+double Clusterer::computeAngularSpan(
+  const pcl::PointCloud<pcl::PointXYZI>& points,
+  const geometry_msgs::msg::Point& centroid)
+{
+  if (points.empty()) return 0.0;
+  
+  double min_angle = M_PI;
+  double max_angle = -M_PI;
+  
+  for (const auto& pt : points) {
+    double angle = atan2(pt.y - centroid.y, pt.x - centroid.x);
+    min_angle = std::min(min_angle, angle);
+    max_angle = std::max(max_angle, angle);
+  }
+  
+  double span_rad = max_angle - min_angle;
+  return span_rad * (180.0 / M_PI);  // Convert to degrees
+}
+
+double Clusterer::computeRadialWidth(const pcl::PointCloud<pcl::PointXYZI>& points)
+{
+  if (points.empty()) return 0.0;
+  
+  double min_range = 1e6;
+  double max_range = 0.0;
+  
+  for (const auto& pt : points) {
+    double range = std::hypot(pt.x, pt.y);
+    min_range = std::min(min_range, range);
+    max_range = std::max(max_range, range);
+  }
+  
+  return max_range - min_range;
+}
+
+double Clusterer::fitCircleCurvature(const pcl::PointCloud<pcl::PointXYZI>& points)
+{
+  // Simple circle fit using least squares
+  // For 2D LiDAR arcs, this gives better radius estimate than centroid method
+  
+  if (points.size() < 3) return 0.0;
+  
+  // Compute moments
+  double sum_x = 0, sum_y = 0, sum_x2 = 0, sum_y2 = 0;
+  for (const auto& pt : points) {
+    sum_x += pt.x;
+    sum_y += pt.y;
+    sum_x2 += pt.x * pt.x;
+    sum_y2 += pt.y * pt.y;
+  }
+  
+  double n = points.size();
+  double Sxx = sum_x2 - sum_x * sum_x / n;
+  double Syy = sum_y2 - sum_y * sum_y / n;
+  
+  // Estimate radius from variance (approximate for circular arcs)
+  double variance = (Sxx + Syy) / n;
+  double radius_est = std::sqrt(variance);
+  
+  return radius_est > 0.001 ? 1.0 / radius_est : 0.0;
+}
+
 void Clusterer::publishDebugMarkers(
   const std::vector<PoleCandidate>& candidates,
   const std_msgs::msg::Header& header)
@@ -119,6 +247,7 @@ void Clusterer::publishDebugMarkers(
   
   for (size_t i = 0; i < candidates.size(); ++i) {
     const auto& candidate = candidates[i];
+    const auto& f = candidate.features;
     
     // Sphere marker at centroid
     visualization_msgs::msg::Marker sphere_marker;
@@ -129,16 +258,16 @@ void Clusterer::publishDebugMarkers(
     sphere_marker.action = visualization_msgs::msg::Marker::ADD;
     sphere_marker.pose.position = candidate.centroid;
     sphere_marker.pose.orientation.w = 1.0;
-    sphere_marker.scale.x = candidate.radius * 2.0;
-    sphere_marker.scale.y = candidate.radius * 2.0;
-    sphere_marker.scale.z = candidate.radius * 2.0;
-    sphere_marker.color.r = 1.0;  // Red for raw clusters
+    sphere_marker.scale.x = f.radial_width * 10.0;  // Exaggerate radial width
+    sphere_marker.scale.y = f.radial_width * 10.0;
+    sphere_marker.scale.z = f.radial_width * 10.0;
+    sphere_marker.color.r = 1.0;  // Orange for raw clusters
     sphere_marker.color.g = 0.5;
     sphere_marker.color.b = 0.0;
     sphere_marker.color.a = 0.5;
     sphere_marker.lifetime = rclcpp::Duration::from_seconds(0.5);
     
-    // Text label
+    // Text label with arc features
     visualization_msgs::msg::Marker text_marker;
     text_marker.header = header;
     text_marker.ns = "cluster_labels";
@@ -149,14 +278,15 @@ void Clusterer::publishDebugMarkers(
     text_marker.pose.position.y = candidate.centroid.y;
     text_marker.pose.position.z = candidate.centroid.z + 0.2;
     text_marker.pose.orientation.w = 1.0;
-    text_marker.scale.z = 0.1;
+    text_marker.scale.z = 0.08;
     text_marker.color.r = 1.0;
     text_marker.color.g = 1.0;
     text_marker.color.b = 1.0;
     text_marker.color.a = 1.0;
     text_marker.text = "C" + std::to_string(candidate.id) + 
                       "\npts:" + std::to_string(candidate.point_count) +
-                      "\nr:" + std::to_string(static_cast<int>(candidate.radius * 1000)) + "mm";
+                      "\narc:" + std::to_string(static_cast<int>(f.arc_length * 1000)) + "mm" +
+                      "\nang:" + std::to_string(static_cast<int>(f.angular_span)) + "°";
     text_marker.lifetime = rclcpp::Duration::from_seconds(0.5);
     
     marker_array.markers.push_back(sphere_marker);

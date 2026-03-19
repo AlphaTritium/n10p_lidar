@@ -41,27 +41,37 @@ PatternMatchResult PatternMatcher::match(const std::vector<TrackedPole>& poles)
     }
   }
   
-  // Check which distances match expected pattern
+  // Check which distances match expected pattern WITH HARMONICS
   result.matches = 0;
   for (const auto& pair_dist : distances) {
     double measured = pair_dist.second;
     bool matched = false;
+    int matched_harmonic = 0;
     
-    for (const auto& expected : config_.expected_distances) {
-      if (std::abs(measured - expected) <= config_.distance_tolerance) {
-        matched = true;
-        break;
+    for (const auto& expected_base : config_.expected_distances) {
+      // Check fundamental AND harmonics (1×, 2×, 3×, etc.)
+      for (int harmonic = 1; harmonic <= config_.max_harmonic; harmonic++) {
+        double expected = expected_base * harmonic;
+        if (std::abs(measured - expected) <= config_.distance_tolerance) {
+          matched = true;
+          matched_harmonic = harmonic;
+          RCLCPP_DEBUG(node_->get_logger(),
+            "✓ Distance P%d-P%d = %.3fm matches %d×%.3fm",
+            pair_dist.first.first, pair_dist.first.second, 
+            measured, harmonic, expected_base);
+          break;
+        }
       }
+      if (matched) break;
     }
     
     if (matched) {
       result.matches++;
-      RCLCPP_DEBUG(node_->get_logger(),
-        "✓ Distance match: P%d-P%.3d = %.3fm (matches expected)",
-        pair_dist.first.first, pair_dist.first.second, measured);
+      result.matched_pairs.push_back(pair_dist.first);
+      result.matched_harmonics[pair_dist.first] = matched_harmonic;
     } else {
       RCLCPP_DEBUG(node_->get_logger(),
-        "✗ Distance mismatch: P%d-P%d = %.3fm (no match)",
+        "✗ Distance P%d-P%d = %.3fm (no match)",
         pair_dist.first.first, pair_dist.first.second, measured);
     }
   }
@@ -71,7 +81,7 @@ PatternMatchResult PatternMatcher::match(const std::vector<TrackedPole>& poles)
     : 0.0;
   
   RCLCPP_INFO_THROTTLE(node_->get_logger(), *node_->get_clock(), 2000,
-    "Pattern match: %.1f%% (%d/%d pairs match expected)",
+    "Pattern match: %.1f%% (%d/%d pairs match expected pattern)",
     result.match_ratio * 100.0, result.matches, result.total_pairs);
   
   // Publish debug info if enabled
@@ -102,7 +112,7 @@ void PatternMatcher::publishDistanceMatrix(
       if (i == j) {
         matrix_msg.data.push_back(0.0);
       } else {
-        auto key = i < j ? std::make_pair(i, j) : std::make_pair(j, i);
+        auto key = i < j ? std::make_pair((int)i, (int)j) : std::make_pair((int)j, (int)i);
         auto it = distances.find(key);
         matrix_msg.data.push_back(it != distances.end() ? it->second : 0.0);
       }
@@ -145,16 +155,21 @@ void PatternMatcher::publishMatchMarkers(
     
     if (!found1 || !found2) continue;
     
-    // Check if this distance matches expected pattern
+    // Check if this distance matches and which harmonic
     bool is_match = false;
-    for (const auto& expected : config_.expected_distances) {
-      if (std::abs(dist - expected) <= config_.distance_tolerance) {
-        is_match = true;
-        break;
+    int harmonic = 0;
+    for (const auto& expected_base : config_.expected_distances) {
+      for (int h = 1; h <= config_.max_harmonic; h++) {
+        if (std::abs(dist - expected_base * h) <= config_.distance_tolerance) {
+          is_match = true;
+          harmonic = h;
+          break;
+        }
       }
+      if (is_match) break;
     }
     
-    // Line marker
+    // Line marker (green if match, red if not)
     visualization_msgs::msg::Marker line_marker;
     line_marker.header.frame_id = "laser_link";
     line_marker.ns = "distance_lines";
@@ -170,7 +185,7 @@ void PatternMatcher::publishMatchMarkers(
     line_marker.color.a = 0.8;
     line_marker.lifetime = rclcpp::Duration::from_seconds(0.5);
     
-    // Distance text label (midpoint)
+    // Distance text label with harmonic info
     visualization_msgs::msg::Marker text_marker;
     text_marker.header.frame_id = "laser_link";
     text_marker.ns = "distance_labels";
@@ -186,7 +201,8 @@ void PatternMatcher::publishMatchMarkers(
     text_marker.color.g = 1.0;
     text_marker.color.b = 1.0;
     text_marker.color.a = 1.0;
-    text_marker.text = std::to_string(static_cast<int>(dist * 1000)) + "mm";
+    text_marker.text = std::to_string(static_cast<int>(dist * 1000)) + "mm" +
+                      (is_match && harmonic > 1 ? "\n(" + std::to_string(harmonic) + "×)" : "");
     text_marker.lifetime = rclcpp::Duration::from_seconds(0.5);
     
     markers.markers.push_back(line_marker);

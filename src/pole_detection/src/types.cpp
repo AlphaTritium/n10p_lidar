@@ -7,3 +7,4 @@
 
 namespace pole_detection
 {
+}

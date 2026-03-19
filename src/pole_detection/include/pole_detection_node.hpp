@@ -6,6 +6,7 @@
 #include "tracker.hpp"
 #include "pattern_matcher.hpp"
 #include <rclcpp/rclcpp.hpp>
+#include "geometric_pattern_matcher.hpp"
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <lslidar_msgs/msg/detected_objects.hpp>
 
@@ -30,6 +31,7 @@ private:
   std::unique_ptr<validator> validator_;
   std::unique_ptr<Tracker> tracker_;
   std::unique_ptr<PatternMatcher> pattern_matcher_;
+  std::unique_ptr<GeometricPatternMatcher> geometric_matcher_;
   
   bool modules_initialized_ = false;
   
