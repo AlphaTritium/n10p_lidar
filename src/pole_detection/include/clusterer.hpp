@@ -41,6 +41,20 @@ private:
   Config config_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr debug_pub_;
   
+  // NEW: Arc feature extraction methods
+  ClusterFeatures extractArcFeatures(
+    const pcl::PointCloud<pcl::PointXYZI>& cluster_points,
+    const geometry_msgs::msg::Point& centroid);
+  
+  double computeArcLength(const pcl::PointCloud<pcl::PointXYZI>& sorted_points);
+  double computeAngularSpan(const pcl::PointCloud<pcl::PointXYZI>& points, const geometry_msgs::msg::Point& centroid);
+  double computeRadialWidth(const pcl::PointCloud<pcl::PointXYZI>& points);
+  double fitCircleCurvature(const pcl::PointCloud<pcl::PointXYZI>& points);
+  
+  void sortPointsByAngle(
+    pcl::PointCloud<pcl::PointXYZI>& points,
+    const geometry_msgs::msg::Point& centroid);
+  
   void publishDebugMarkers(
     const std::vector<PoleCandidate>& candidates,
     const std_msgs::msg::Header& header);

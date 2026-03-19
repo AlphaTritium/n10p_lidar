@@ -51,8 +51,12 @@ std::vector<TrackedPole> Tracker::update(
     
     // Update or create track
     if (best_track_idx >= 0) {
-      // Update existing track
-      tracks_[best_track_idx].update(detection.centroid, detection.radius, current_time);
+      double confidence = 1.0;  // Default confidence
+      if (!detection.rejection_reason.empty()) {
+        confidence = 0.5;
+      }
+      
+      tracks_[best_track_idx].update(detection.centroid, confidence, current_time, config_.confirmation_threshold);
       detection_matched[i] = true;
       
       RCLCPP_DEBUG(node_->get_logger(),
@@ -64,7 +68,12 @@ std::vector<TrackedPole> Tracker::update(
     } else {
       // Create new track if under limit
       if (static_cast<int>(tracks_.size()) < config_.max_tracks) {
-        TrackedPole new_track(next_track_id_++, detection.centroid, detection.radius, current_time);
+        double confidence = 1.0;
+        if (!detection.rejection_reason.empty()) {
+          confidence = 0.5;
+        }
+        
+        TrackedPole new_track(next_track_id_++, detection.centroid, confidence, current_time);
         tracks_.push_back(new_track);
         
         RCLCPP_INFO(node_->get_logger(),
@@ -122,9 +131,9 @@ void Tracker::publishDebugMarkers(
     sphere_marker.action = visualization_msgs::msg::Marker::ADD;
     sphere_marker.pose.position = track.position;
     sphere_marker.pose.orientation.w = 1.0;
-    sphere_marker.scale.x = track.avg_radius * 2.0 * 3.0;  // Exaggerate size for visibility
-    sphere_marker.scale.y = track.avg_radius * 2.0 * 3.0;
-    sphere_marker.scale.z = track.avg_radius * 2.0 * 3.0;
+    sphere_marker.scale.x = track.avg_features_confidence * 0.15;  // Use confidence for size
+    sphere_marker.scale.y = track.avg_features_confidence * 0.15;
+    sphere_marker.scale.z = track.avg_features_confidence * 0.15;
     sphere_marker.color.r = r;
     sphere_marker.color.g = g;
     sphere_marker.color.b = b;
@@ -151,7 +160,7 @@ void Tracker::publishDebugMarkers(
                     "\n(" + std::to_string(track.detection_count) + ")";
     id_marker.lifetime = rclcpp::Duration::from_seconds(0.5);
     
-    // Path history (optional - shows trail)
+    // Path history
     visualization_msgs::msg::Marker path_marker;
     path_marker.header = header;
     path_marker.ns = "track_paths";
@@ -166,7 +175,6 @@ void Tracker::publishDebugMarkers(
     path_marker.color.a = 0.5;
     path_marker.lifetime = rclcpp::Duration::from_seconds(1.0);
     
-    // Add current position to path (you could store history for longer trails)
     geometry_msgs::msg::Point p;
     p.x = track.position.x;
     p.y = track.position.y;
