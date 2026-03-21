@@ -9,28 +9,31 @@ pole_detection:
     cluster_max_size: 30           # Poles are small objects
     
     # ========================================
-    # Validator Parameters (MULTI-FEATURE FILTERING)
+    # Validator Parameters (AREA-BASED, NO RADIUS!)
     # ========================================
-    # Angular span filtering (arc angle in degrees)
-    min_angular_span: 10.0          # Minimum arc angle (rejects noise)
-    max_angular_span: 30.0         # Maximum arc angle (rejects walls)
-    
     # Point count filtering
-    min_point_count: 2             # Minimum points (sparse data friendly)
-    max_point_count: 30            # Maximum points (poles are small)
+    min_point_count: 3             # Minimum 3 points (hallucination prevention)
+    max_point_count: 30            # Maximum points
     
-    # Radial width filtering (apparent thickness)
-    min_radial_width: 0.005        # 5mm minimum thickness
-    max_radial_width: 0.05         # 5cm maximum thickness (rejects walls)
+    # Bounding box area filtering (REPLACES RADIUS!)
+    # Expected pole area: 3mm×3mm to 50mm×50mm
+    min_bbox_area: 0.0003          # 300mm² minimum
+    max_bbox_area: 0.0025          # 2500mm² maximum
+    
+    # Radial width (max dimension, NOT RADIUS!)
+    min_radial_width: 0.010        # 10mm minimum
+    max_radial_width: 0.050        # 50mm maximum
     
     # Range filtering
     max_range: 0.8                 # Maximum reliable detection range
     
-    # Legacy parameters (kept for compatibility)
-    expected_radius: 0.028
-    radius_tolerance: 0.008
-    use_intensity_stats: false      # Disabled - unreliable for 2D LiDAR
-    min_intensity: 50.0
+    # Deleted: expected_radius, radius_tolerance (NO LONGER USED!)
+    
+    # Weights
+    weight_point_count: 0.30
+    weight_bbox_area: 0.35         # PRIMARY FEATURE
+    weight_radial_width: 0.25
+    weight_range: 0.10
     
     # ========================================
     # Tracker Parameters (WORLD-FRAME OPTIMIZED)

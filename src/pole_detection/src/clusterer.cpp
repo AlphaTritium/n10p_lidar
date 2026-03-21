@@ -113,43 +113,87 @@ ClusterFeatures Clusterer::extractArcFeatures(
 {
   ClusterFeatures features;
   
-  // Sort points by angle around centroid
-  pcl::PointCloud<pcl::PointXYZI> sorted_points = cluster_points;
-  sortPointsByAngle(sorted_points, centroid);
+  // SIMPLE features - NO RADIUS ESTIMATION!
   
-  // Compute arc length
-  features.arc_length = computeArcLength(sorted_points);
-  
-  // Compute angular span
-  features.angular_span = computeAngularSpan(sorted_points, centroid);
-  
-  // Compute radial width (thickness proxy)
-  features.radial_width = computeRadialWidth(sorted_points);
-  
-  // Fit circle to estimate curvature
-  features.curvature_estimate = fitCircleCurvature(sorted_points);
-  
-  // Compute range from sensor (assume sensor at origin)
+  // 1. Range from sensor
   features.range_from_sensor = std::hypot(centroid.x, centroid.y);
   
-  // Intensity statistics
+  // 2. Point count (density indicator)
+  features.point_count = cluster_points.size();
+  
+  // 3. Bounding box area (KEY FEATURE - replaces radius!)
+  double min_x = 1e6, max_x = -1e6;
+  double min_y = 1e6, max_y = -1e6;
+  for (const auto& pt : cluster_points) {
+    min_x = std::min(min_x, (double)pt.x);
+    max_x = std::max(max_x, (double)pt.x);
+    min_y = std::min(min_y, (double)pt.y);
+    max_y = std::max(max_y, (double)pt.y);
+  }
+  
+  double extent_x = max_x - min_x;
+  double extent_y = max_y - min_y;
+  features.radial_width = std::max(extent_x, extent_y);  // Max dimension
+  features.arc_length = extent_x * extent_y;  // Bounding box AREA (m²)
+  features.angular_span = 0.0;  // Not used anymore
+  
+  // 4. Convex hull area (more accurate than bounding box)
+  if (cluster_points.size() >= 3) {
+    features.curvature_estimate = computeConvexHullArea(cluster_points);  // Reuse field for area
+  } else {
+    features.curvature_estimate = 0.0;
+  }
+  
+  // 5. Intensity
   double sum_intensity = 0.0;
   for (const auto& pt : cluster_points) {
     sum_intensity += pt.intensity;
   }
   features.avg_intensity = cluster_points.empty() ? 0.0 : sum_intensity / cluster_points.size();
-  
-  // Intensity variance (optional, can be added later)
   features.intensity_variance = 0.0;
   
-  // Point count
-  features.point_count = cluster_points.size();
-  
-  // Centroid
+  // 6. Centroid
   features.centroid = centroid;
+  features.legacy_radius = 0.0;  // ZEROED - not used!
+  
+  RCLCPP_DEBUG(node_->get_logger(), 
+    "Cluster %d: pts=%d, bbox_area=%.6fm², convex_area=%.6fm², width=%.3fm",
+    features.id, features.point_count, 
+    features.arc_length, features.curvature_estimate, features.radial_width);
   
   return features;
 }
+
+// NEW: Compute convex hull area (robust pole size metric)
+double Clusterer::computeConvexHullArea(const pcl::PointCloud<pcl::PointXYZI>& points)
+{
+  if (points.size() < 3) return 0.0;
+  
+  // Simple convex hull area using shoelace formula
+  // Sort points by angle around centroid
+  pcl::PointXYZI centroid_3d;
+  pcl::computeCentroid(points, centroid_3d);
+  
+  geometry_msgs::msg::Point centroid;
+  centroid.x = centroid_3d.x;
+  centroid.y = centroid_3d.y;
+  centroid.z = 0.0;
+  
+  // Sort points angularly
+  pcl::PointCloud<pcl::PointXYZI> sorted_points = points;
+  sortPointsByAngle(sorted_points, centroid);
+  
+  // Shoelace formula
+  double area = 0.0;
+  for (size_t i = 0; i < sorted_points.size(); ++i) {
+    size_t j = (i + 1) % sorted_points.size();
+    area += sorted_points[i].x * sorted_points[j].y;
+    area -= sorted_points[j].x * sorted_points[i].y;
+  }
+  
+  return std::abs(area) / 2.0;
+}
+
 
 void Clusterer::sortPointsByAngle(
   pcl::PointCloud<pcl::PointXYZI>& points,

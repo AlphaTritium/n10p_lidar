@@ -70,75 +70,68 @@ double validator::computeLikelihoodScore(const ClusterFeatures& f)
   double score = 0.0;
   double max_possible_score = 0.0;
   
-  // RANGE-BASED WEIGHTING: Adjust expectations based on distance
+  // RANGE-BASED WEIGHTING
   double range_weight = 1.0;
   if (f.range_from_sensor > 0.5) {
-    range_weight = 0.7;  // More lenient for distant poles
+    range_weight = 0.7;
   } else if (f.range_from_sensor > 0.3) {
-    range_weight = 0.85; // Moderate leniency
+    range_weight = 0.85;
   }
   
-  // FEATURE 1: Angular span (poles typically 20-60° at close range)
-  max_possible_score += config_.weight_angular_span;
-  double min_ang = config_.min_angular_span * range_weight;  // Reduce expectation at distance
-  double max_ang = config_.max_angular_span / range_weight;  // Increase upper bound
-  
-  if (f.angular_span >= min_ang && f.angular_span <= max_ang) {
-    score += config_.weight_angular_span;
-  } else if (f.angular_span < 5.0 || f.angular_span > 90.0) {
-    score -= 0.1;
-  }
-  
-  // FEATURE 2: Point count - CRITICAL WITH RANGE ADAPTATION
+  // FEATURE 1: Point count (density)
   max_possible_score += config_.weight_point_count;
   int min_pts = static_cast<int>(config_.min_point_count * range_weight);
-  min_pts = std::max(3, min_pts);  // Never go below 3
+  min_pts = std::max(3, min_pts);
   int max_pts = static_cast<int>(config_.max_point_count / range_weight);
   
   if (f.point_count >= min_pts && f.point_count <= max_pts) {
     score += config_.weight_point_count;
-    
-    // Bonus for good point count at long range
-    if (f.range_from_sensor > 0.5 && f.point_count >= 4) {
-      score += 0.1;  // Reward distant poles with decent returns
-      RCLCPP_DEBUG(node_->get_logger(),
-        "Cluster %d: Range bonus (+0.1) - %d pts at %.2fm",
-        f.id, f.point_count, f.range_from_sensor);
-    }
   }
   
-  // HARD REJECTION: Less than 3 points = hallucination (ALWAYS)
+  // HARD REJECTION: Less than 3 points
   if (f.point_count < 3) {
     RCLCPP_DEBUG(node_->get_logger(),
       "Cluster %d: REJECTED - only %d points (hallucination)",
       f.id, f.point_count);
-    return 0.0;  // Immediate rejection
+    return 0.0;
   }
   
-  // FEATURE 3: Radial width (thickness proxy) - ADAPTIVE
+  // FEATURE 2: BOUNDING BOX AREA (replaces radius!)
+  // Pole cross-section should be ~25-28mm diameter
+  // Expected area: π×(0.014)² ≈ 0.0006 m² to π×(0.012)² ≈ 0.00045 m²
+  // But we use bounding box, so expect slightly larger
   max_possible_score += config_.weight_radial_width;
-  double min_width = config_.min_radial_width * range_weight;
-  double max_width = config_.max_radial_width / range_weight;
+  double expected_min_area = 0.0003;  // 3cm × 3mm (sparse returns)
+  double expected_max_area = 0.0025;  // 5cm × 5cm (close range)
+  
+  double bbox_area = f.arc_length;  // We store bbox area in arc_length field
+  if (bbox_area >= expected_min_area && bbox_area <= expected_max_area) {
+    score += config_.weight_radial_width;
+    RCLCPP_DEBUG(node_->get_logger(),
+      "Cluster %d: Area OK (%.6fm²)", f.id, bbox_area);
+  } else {
+    RCLCPP_DEBUG(node_->get_logger(),
+      "Cluster %d: Area WRONG (%.6fm², expected %.6f-%.6f)",
+      f.id, bbox_area, expected_min_area, expected_max_area);
+  }
+  
+  // FEATURE 3: Radial width (max dimension, not radius!)
+  // Pole diameter: 25-28mm, so max dimension should be similar
+  max_possible_score += config_.weight_curvature;  // Reuse weight
+  double min_width = 0.010;  // 10mm minimum
+  double max_width = 0.050;  // 50mm maximum
   
   if (f.radial_width >= min_width && f.radial_width <= max_width) {
-    score += config_.weight_radial_width;
-  }
-  
-  // FEATURE 4: Curvature consistency (weak feature)
-  max_possible_score += config_.weight_curvature;
-  double expected_curvature = 1.0 / config_.expected_radius;
-  if (f.curvature_estimate > 0.0 && 
-      std::abs(f.curvature_estimate - expected_curvature) < 15.0) {
     score += config_.weight_curvature;
   }
   
-  // FEATURE 5: Range consistency (closer = more reliable)
+  // FEATURE 4: Range (closer = more reliable)
   max_possible_score += config_.weight_range;
   if (f.range_from_sensor <= config_.max_range) {
     score += config_.weight_range;
   }
   
-  // Normalize score to 0.0-1.0 range
+  // Normalize
   double normalized_score = std::max(0.0, std::min(1.0, score / max_possible_score));
   
   return normalized_score;
@@ -152,31 +145,29 @@ std::string validator::generateRejectionReason(double score, const ClusterFeatur
   
   std::vector<std::string> reasons;
   
-  if (f.angular_span < config_.min_angular_span || 
-      f.angular_span > config_.max_angular_span) {
-    reasons.push_back("Angular span out of range (" + 
-                     std::to_string(static_cast<int>(f.angular_span)) + "°)");
+  if (f.point_count < 3) {
+    reasons.push_back("Too few points (<3)");
   }
   
-  if (f.point_count < config_.min_point_count || 
-      f.point_count > config_.max_point_count) {
-    reasons.push_back("Point count mismatch (" + 
-                     std::to_string(f.point_count) + " pts)");
+  // Check area
+  double bbox_area = f.arc_length;
+  double expected_min_area = 0.0003;
+  double expected_max_area = 0.0025;
+  if (bbox_area < expected_min_area || bbox_area > expected_max_area) {
+    reasons.push_back("Wrong area (" + std::to_string(static_cast<int>(bbox_area * 1000000)) + "mm²)");
   }
   
-  if (f.radial_width < config_.min_radial_width || 
-      f.radial_width > config_.max_radial_width) {
-    reasons.push_back("Radial width abnormal (" + 
-                     std::to_string(static_cast<int>(f.radial_width * 1000)) + "mm)");
+  // Check radial width
+  if (f.radial_width < 0.010 || f.radial_width > 0.050) {
+    reasons.push_back("Wrong width (" + std::to_string(static_cast<int>(f.radial_width * 1000)) + "mm)");
   }
   
   if (f.range_from_sensor > config_.max_range) {
-    reasons.push_back("Too far (" + 
-                     std::to_string(static_cast<int>(f.range_from_sensor * 100)) + "cm)");
+    reasons.push_back("Too far");
   }
   
   if (reasons.empty()) {
-    return "Low overall score (" + std::to_string(static_cast<int>(score * 100)) + "%)";
+    return "Low score";
   }
   
   std::string combined;

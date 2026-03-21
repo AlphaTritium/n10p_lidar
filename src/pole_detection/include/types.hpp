@@ -19,34 +19,34 @@ struct ClusterFeatures
   geometry_msgs::msg::Point centroid;
   int point_count;
   
-  // Arc-based features for 2D LiDAR
-  double arc_length;
-  double angular_span;
-  double radial_width;
-  double curvature_estimate;
+  // SIZE FEATURES (NO RADIUS!)
+  double arc_length;           // NOW: Bounding box AREA (m²)
+  double angular_span;         // UNUSED (kept for compatibility)
+  double radial_width;         // MAX DIMENSION (not radius!)
+  double curvature_estimate;   // NOW: Convex hull AREA (m²)
   
-  // Intensity (optional)
+  // Intensity
   double avg_intensity;
   double intensity_variance;
   
-  // Range from sensor
+  // Range
   double range_from_sensor;
   
-  // Legacy radius estimate
-  double legacy_radius;
+  // Legacy - DEPRECATED, ALWAYS ZERO
+  double legacy_radius;        // NOT USED - always 0.0
   
   ClusterFeatures()
     : id(0)
     , centroid(geometry_msgs::msg::Point())
     , point_count(0)
-    , arc_length(0.0)
+    , arc_length(0.0)          // Bbox area
     , angular_span(0.0)
-    , radial_width(0.0)
-    , curvature_estimate(0.0)
+    , radial_width(0.0)        // Max dimension
+    , curvature_estimate(0.0)  // Convex hull area
     , avg_intensity(0.0)
     , intensity_variance(0.0)
     , range_from_sensor(0.0)
-    , legacy_radius(0.0)
+    , legacy_radius(0.0)       // ZERO!
   {}
 };
 
