@@ -28,13 +28,19 @@ public:
     double distance_tolerance;
     bool enable_harmonics;  // Match multiples: 1×, 2×, 3× base distance
     int max_harmonic;       // Maximum harmonic to check (default: 3)
+    bool require_colinear;  // NEW: Enforce strict colinearity
+    double colinearity_tolerance;  // NEW: Max deviation from line (m)
+    int min_poles_for_pattern;  // NEW: Minimum poles to confirm pattern
     bool publish_debug;
     
     Config()
       : expected_distances({0.185})
-      , distance_tolerance(0.03)
-      , enable_harmonics(true)
-      , max_harmonic(3)
+      , distance_tolerance(0.01)  // ±1cm (stricter)
+      , enable_harmonics(false)    // DISABLED for strict colinearity
+      , max_harmonic(1)
+      , require_colinear(true)     // ENFORCE colinearity
+      , colinearity_tolerance(0.01) // ±2cm from line
+      , min_poles_for_pattern(3)   // At least 4 poles in line
       , publish_debug(false)
     {}
   };

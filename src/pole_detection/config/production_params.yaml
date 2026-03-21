@@ -2,48 +2,72 @@
 pole_detection:
   ros__parameters:
     # ========================================
-    # Preprocessor Parameters
+    # Preprocessor Parameters (REMOVED - using raw clouds)
     # ========================================
-    range_min: 0.2              # Minimum detection range (m)
-    range_max: 0.8              # Maximum detection range (m)
-    z_min: -0.3                 # Minimum height filter (m)
-    z_max: 0.3                  # Maximum height filter (m)
-    voxel_leaf_size: 0.01       # Voxel grid downsampling (m)
-    use_intensity_filter: true  # Filter low-intensity points
-    min_intensity: 50.0         # Minimum intensity threshold
+    # Note: Preprocessing disabled for maximum sensitivity
+    range_min: 0.2              # Kept for parameter compatibility
+    range_max: 0.8
+    z_min: -0.3
+    z_max: 0.3
+    voxel_leaf_size: 0.01
+    use_intensity_filter: false  # Disabled - unreliable
+    min_intensity: 50.0
     
     # ========================================
-    # Clusterer Parameters
+    # Clusterer Parameters (OPTIMIZED FOR STATIC POLES)
     # ========================================
-    cluster_tolerance: 0.05     # Euclidean clustering tolerance (m)
-    cluster_min_size: 6         # Minimum points per cluster
-    cluster_max_size: 100       # Maximum points per cluster
+    cluster_tolerance: 0.03        # 3cm - tight for clean separation
+    cluster_min_size: 3            # Handle sparse returns
+    cluster_max_size: 25           # Poles are small
     
     # ========================================
-    # validator Parameters
+    # validator Parameters (STRICT FILTERING)
     # ========================================
-    expected_radius: 0.024      # Expected pole radius (m)
-    radius_tolerance: 0.008     # Radius validation tolerance (m)
-    use_intensity_stats: true   # Use intensity in validation
+    # Angular span filtering
+    min_angular_span: 10.0         # Slightly stricter than debug
+    max_angular_span: 30.0         # Slightly stricter
+    
+    # Point count filtering  
+    min_point_count: 3
+    max_point_count: 20          # Stricter than debug
+    
+    # Radial width filtering (KEY FOR WALL SEPARATION)
+    min_radial_width: 0.006        # 6mm minimum
+    max_radial_width: 0.04         # 4cm maximum (stricter wall rejection)
+    
+    # Range filtering
+    max_range: 0.7                 # Slightly shorter than debug
+    
+    # Legacy parameters
+    expected_radius: 0.028
+    radius_tolerance: 0.008
+    use_intensity_stats: false
+    min_intensity: 50.0
     
     # ========================================
-    # Tracker Parameters
+    # Tracker Parameters (CONSERVATIVE)
     # ========================================
-    max_tracks: 6               # Maximum poles to track
-    association_distance: 0.15  # Association gate distance (m)
-    max_invisible_frames: 20    # Frames before track is stale
+    max_tracks: 8                  # Reasonable limit
+    association_distance: 0.08     # Very tight in world frame (8cm)
+    max_invisible_frames: 25       # Moderate persistence
+    confirmation_threshold: 3      # Require 3 detections
     
     # ========================================
-    # Pattern Matcher Parameters
+    # Pattern Matcher Parameters (PRECISE)
     # ========================================
     enable_pattern_matching: true
-    expected_inter_pole_distances: [0.185]  # Expected distances between poles (m)
-    distance_match_tolerance: 0.025         # Pattern match tolerance (m)
+    expected_inter_pole_distances: [0.185]
+    distance_match_tolerance: 0.01  # ±1cm tolerance
+    
+    # ========================================
+    # Motion Gating Parameters (STRICT)
+    # ========================================
+    max_linear_velocity: 0.2        # More strict than debug
+    max_angular_velocity: 0.2       # More strict than debug
     
     # ========================================
     # Debug Publishing (ALL OFF for production)
     # ========================================
-    # publish_debug_cloud: false
     publish_debug_clusters: false
     publish_debug_validation: false
     publish_debug_tracks: false

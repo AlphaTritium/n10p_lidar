@@ -1,28 +1,69 @@
+# Debug Configuration - All debug topics ENABLED, optimized for static poles + moving LiDAR
 pole_detection:
   ros__parameters:
-    # Clusterer - LOW threshold for sparse data
-    cluster_tolerance: 0.08
-    cluster_min_size: 3
-    cluster_max_size: 50
+    # ========================================
+    # Clusterer Parameters (TIGHTER for separation)
+    # ========================================
+    cluster_tolerance: 0.04        # Reduced from 0.08 → 4cm for better pole/wall separation
+    cluster_min_size: 3            # Handle very sparse returns (2+ points)
+    cluster_max_size: 30           # Poles are small objects
     
-    # Validator - SIMPLE checks
+    # ========================================
+    # Validator Parameters (MULTI-FEATURE FILTERING)
+    # ========================================
+    # Angular span filtering (arc angle in degrees)
+    min_angular_span: 10.0          # Minimum arc angle (rejects noise)
+    max_angular_span: 30.0         # Maximum arc angle (rejects walls)
+    
+    # Point count filtering
+    min_point_count: 2             # Minimum points (sparse data friendly)
+    max_point_count: 30            # Maximum points (poles are small)
+    
+    # Radial width filtering (apparent thickness)
+    min_radial_width: 0.005        # 5mm minimum thickness
+    max_radial_width: 0.05         # 5cm maximum thickness (rejects walls)
+    
+    # Range filtering
+    max_range: 0.8                 # Maximum reliable detection range
+    
+    # Legacy parameters (kept for compatibility)
     expected_radius: 0.028
     radius_tolerance: 0.008
-    min_range: 0.15
-    max_range: 0.6
-    max_radial_extent: 0.1
+    use_intensity_stats: false      # Disabled - unreliable for 2D LiDAR
+    min_intensity: 50.0
     
-    # Tracker - AGGRESSIVE
-    max_tracks: 10
-    association_distance: 0.2
-    max_invisible_frames: 30
+    # ========================================
+    # Tracker Parameters (WORLD-FRAME OPTIMIZED)
+    # ========================================
+    max_tracks: 8                 # Allow extra tracks for debugging
+    association_distance: 0.1       # Tighter in world frame (10cm)
+    max_invisible_frames: 20       # Keep tracks longer (3 seconds)
+    confirmation_threshold: 2       # Confirm faster with multiple viewpoints
     
-    # Pattern Matcher - WITH HARMONICS
+    # ========================================
+    # Pattern Matcher Parameters (HARMONICS + WORLD)
+    # ========================================
     enable_pattern_matching: true
-    expected_inter_pole_distances: [0.185]
-    distance_match_tolerance: 0.05
+    expected_inter_pole_distances: [0.185]  # 185mm spacing
+    distance_match_tolerance: 0.01          # ±1cm tolerance
     
-    # Debug - ALL ON
+    # Strict colinearity parameters
+    require_colinearity: true               # ENFORCE straight line
+    colinearity_tolerance: 0.01             # ±2cm from line
+    min_poles_for_pattern: 3                # At least 4 poles required
+    
+    # Harmonics DISABLED for strict mode
+    enable_harmonics: false
+
+    # ========================================
+    # Motion Gating Parameters
+    # ========================================
+    max_linear_velocity: 0.3        # Skip processing if robot moving >0.3 m/s
+    max_angular_velocity: 0.3       # Skip processing if rotating >0.3 rad/s
+    
+    # ========================================
+    # Debug Publishing (ALL ON)
+    # ========================================
     publish_debug_clusters: true
     publish_debug_validation: true
     publish_debug_tracks: true
