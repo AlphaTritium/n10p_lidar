@@ -70,26 +70,57 @@ double validator::computeLikelihoodScore(const ClusterFeatures& f)
   double score = 0.0;
   double max_possible_score = 0.0;
   
-  // FEATURE 1: Angular span (poles typically 20-60°)
+  // RANGE-BASED WEIGHTING: Adjust expectations based on distance
+  double range_weight = 1.0;
+  if (f.range_from_sensor > 0.5) {
+    range_weight = 0.7;  // More lenient for distant poles
+  } else if (f.range_from_sensor > 0.3) {
+    range_weight = 0.85; // Moderate leniency
+  }
+  
+  // FEATURE 1: Angular span (poles typically 20-60° at close range)
   max_possible_score += config_.weight_angular_span;
-  if (f.angular_span >= config_.min_angular_span && 
-      f.angular_span <= config_.max_angular_span) {
+  double min_ang = config_.min_angular_span * range_weight;  // Reduce expectation at distance
+  double max_ang = config_.max_angular_span / range_weight;  // Increase upper bound
+  
+  if (f.angular_span >= min_ang && f.angular_span <= max_ang) {
     score += config_.weight_angular_span;
-  } else if (f.angular_span < 10.0 || f.angular_span > 90.0) {
+  } else if (f.angular_span < 5.0 || f.angular_span > 90.0) {
     score -= 0.1;
   }
   
-  // FEATURE 2: Point count (density indicator)
+  // FEATURE 2: Point count - CRITICAL WITH RANGE ADAPTATION
   max_possible_score += config_.weight_point_count;
-  if (f.point_count >= config_.min_point_count && 
-      f.point_count <= config_.max_point_count) {
+  int min_pts = static_cast<int>(config_.min_point_count * range_weight);
+  min_pts = std::max(3, min_pts);  // Never go below 3
+  int max_pts = static_cast<int>(config_.max_point_count / range_weight);
+  
+  if (f.point_count >= min_pts && f.point_count <= max_pts) {
     score += config_.weight_point_count;
+    
+    // Bonus for good point count at long range
+    if (f.range_from_sensor > 0.5 && f.point_count >= 4) {
+      score += 0.1;  // Reward distant poles with decent returns
+      RCLCPP_DEBUG(node_->get_logger(),
+        "Cluster %d: Range bonus (+0.1) - %d pts at %.2fm",
+        f.id, f.point_count, f.range_from_sensor);
+    }
   }
   
-  // FEATURE 3: Radial width (thickness proxy, poles are thin)
+  // HARD REJECTION: Less than 3 points = hallucination (ALWAYS)
+  if (f.point_count < 3) {
+    RCLCPP_DEBUG(node_->get_logger(),
+      "Cluster %d: REJECTED - only %d points (hallucination)",
+      f.id, f.point_count);
+    return 0.0;  // Immediate rejection
+  }
+  
+  // FEATURE 3: Radial width (thickness proxy) - ADAPTIVE
   max_possible_score += config_.weight_radial_width;
-  if (f.radial_width >= config_.min_radial_width && 
-      f.radial_width <= config_.max_radial_width) {
+  double min_width = config_.min_radial_width * range_weight;
+  double max_width = config_.max_radial_width / range_weight;
+  
+  if (f.radial_width >= min_width && f.radial_width <= max_width) {
     score += config_.weight_radial_width;
   }
   

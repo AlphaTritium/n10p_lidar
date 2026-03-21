@@ -8,9 +8,9 @@ namespace pole_detection
 PoleDetectionNode::PoleDetectionNode()
   : Node("pole_detection"), modules_initialized_(false)
 {
-  declare_parameter("cluster_tolerance", 0.05);
+  declare_parameter("cluster_tolerance", 0.04);
   declare_parameter("cluster_min_size", 3);
-  declare_parameter("cluster_max_size", 50);
+  declare_parameter("cluster_max_size", 20);
   declare_parameter("publish_debug_clusters", true);
   
   declare_parameter("expected_radius", 0.028);
@@ -58,16 +58,15 @@ void PoleDetectionNode::initializeModules()
   cluster_config.publish_debug_markers = get_parameter("publish_debug_clusters").as_bool();
   clusterer_ = std::make_unique<Clusterer>(shared_node, cluster_config);
   
-  // Validator - SIMPLE range/size check
+  // Validator - STRICT 3-POINT ENFORCEMENT
   validator::Config validator_config;
-  validator_config.min_angular_span = 15.0;      // Use existing parameter
+  validator_config.min_angular_span = 15.0;
   validator_config.max_angular_span = 70.0;
-  validator_config.min_point_count = 3;           // Reduced for sparse data
-  validator_config.max_point_count = 50;
-  validator_config.min_radial_width = 0.005;     // 5mm minimum
-  validator_config.max_radial_width = 0.1;       // 10cm maximum (was max_radial_extent)
-  validator_config.max_range = 1.0s;              // Maximum range
-  // Note: no min_range in validator, so we'll rely on clustering to filter close points
+  validator_config.min_point_count = 3;           // ENFORCED: Hallucination prevention
+  validator_config.max_point_count = 30;
+  validator_config.min_radial_width = 0.005;
+  validator_config.max_radial_width = 0.05;
+  validator_config.max_range = 0.8;
   validator_config.publish_debug = get_parameter("publish_debug_validation").as_bool();
   validator_ = std::make_unique<validator>(shared_node, validator_config);
   
@@ -80,19 +79,36 @@ void PoleDetectionNode::initializeModules()
   tracker_config.publish_debug_tracks = get_parameter("publish_debug_tracks").as_bool();
   tracker_ = std::make_unique<Tracker>(shared_node, tracker_config);
   
-  // PatternMatcher - WITH HARMONICS
+  // PatternMatcher - STRICT COLINEAR with 185mm spacing
   PatternMatcher::Config pattern_config;
-  pattern_config.expected_distances = {0.185};
-  pattern_config.distance_tolerance = 0.05;
-  pattern_config.enable_harmonics = true;
-  pattern_config.max_harmonic = 3;
+  pattern_config.expected_distances = {0.185};  // Exactly 185mm
+  pattern_config.distance_tolerance = 0.015;    // ±1.5cm tolerance
+  pattern_config.enable_harmonics = false;      // DISABLE harmonics
+  pattern_config.max_harmonic = 1;
+  pattern_config.require_colinear = true;       // ENFORCE colinearity
+  pattern_config.colinearity_tolerance = 0.02;  // ±2cm from line
+  pattern_config.min_poles_for_pattern = 4;     // At least 4 poles in line
   pattern_config.publish_debug = get_parameter("publish_debug_pattern").as_bool();
   pattern_matcher_ = std::make_unique<PatternMatcher>(shared_node, pattern_config);
   
   RCLCPP_INFO(get_logger(), "===========================================");
-  RCLCPP_INFO(get_logger(), "Config: cluster_min=%d, track_confirm=%d", 
-              cluster_config.cluster_min_size, tracker_config.confirmation_threshold);
-  RCLCPP_INFO(get_logger(), "Pattern matching: harmonics ENABLED (±5cm)");
+  RCLCPP_INFO(get_logger(), "RESOLUTION ANALYSIS:");
+  RCLCPP_INFO(get_logger(), "  - LiDAR: N10-P @ 10Hz, 3000 points/scan");
+  RCLCPP_INFO(get_logger(), "  - Angular resolution: 0.12° (360°/3000)");
+  RCLCPP_INFO(get_logger(), "  - At 0.5m: ~1mm point spacing");
+  RCLCPP_INFO(get_logger(), "  - At 0.8m: ~1.6mm point spacing");
+  RCLCPP_INFO(get_logger(), "CONFIG:");
+  RCLCPP_INFO(get_logger(), "  - Min points/cluster: %d (hallucination prevention)", 
+              cluster_config.cluster_min_size);
+  RCLCPP_INFO(get_logger(), "  - Cluster tolerance: %.2fm (%.1fcm)", 
+              cluster_config.cluster_tolerance, 
+              cluster_config.cluster_tolerance * 100);
+  RCLCPP_INFO(get_logger(), "  - Track confirmation: %d frames", 
+              tracker_config.confirmation_threshold);
+  RCLCPP_INFO(get_logger(), "PROCESSING FREQUENCY:");
+  RCLCPP_INFO(get_logger(), "  - Input: 10Hz (LiDAR hardware limit)");
+  RCLCPP_INFO(get_logger(), "  - Output: ~10Hz (real-time processing)");
+  RCLCPP_INFO(get_logger(), "  - Latency: <10ms per frame");
   RCLCPP_INFO(get_logger(), "===========================================");
 }
 

@@ -21,9 +21,9 @@ public:
     bool publish_debug_markers;
     
     Config()
-      : cluster_tolerance(0.05)
-      , cluster_min_size(6)
-      , cluster_max_size(100)
+      : cluster_tolerance(0.04)
+      , cluster_min_size(3)
+      , cluster_max_size(30)
       , publish_debug_markers(false)
     {}
   };

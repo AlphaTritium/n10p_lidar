@@ -36,7 +36,7 @@ def generate_launch_description():
                 'interface_selection': 'serial',
                 'serial_port_': LaunchConfiguration('serial_port'),
                 'lidar_name': 'N10_P',
-                'baud_rate_': 460800,
+                'baud_rate_': 921600,
                 'frame_id': 'laser_link',
                 'scan_topic': '/scan',
                 'pointcloud_topic': '/lslidar_point_cloud',
