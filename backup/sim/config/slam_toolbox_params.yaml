@@ -1,0 +1,32 @@
+slam_toolbox:
+  ros__parameters:
+    # Map parameters
+    map_frame: map
+    odom_frame: odom
+    base_frame: base_link  # ← Change from base_link
+    scan_topic: /scan_filtered
+    mode: mapping
+
+    # Scan matching (improve accuracy)
+    minimum_travel_distance: 0.05  # ← Lower for better resolution
+    minimum_travel_heading: 0.03
+    scan_buffer_size: 20  # ← Increase for better loop closure
+    scan_buffer_maximum_scan_distance: 15.0
+    link_match_minimum_response_fine: 0.12
+    link_scan_maximum_distance: 2.0
+
+    # Loop closing
+    do_loop_closing: true
+    loop_match_minimum_chain_size: 8
+    loop_match_maximum_variance_coarse: 2.0
+    loop_match_minimum_response_coarse: 0.4
+    loop_match_minimum_response_fine: 0.5
+
+    # Map quality
+    map_update_interval: 1.0  # ← More frequent updates
+    resolution: 0.025  # ← Higher resolution (2.5cm)
+    max_laser_range: 12.0
+    minimum_time_interval: 0.1
+    transform_timeout: 0.1
+    use_scan_matching: true
+    use_scan_barycenter: true
