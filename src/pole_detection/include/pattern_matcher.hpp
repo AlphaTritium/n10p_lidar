@@ -16,31 +16,31 @@ struct PatternMatchResult
   int matches;
   int total_pairs;
   double match_ratio;
-  std::vector<std::pair<int, int>> matched_pairs;  // Track which pairs matched
-  std::map<std::pair<int, int>, int> matched_harmonics;  // Which harmonic matched (1×, 2×, etc.)
+  std::vector<std::pair<int, int>> matched_pairs;
+  std::map<std::pair<int, int>, int> matched_harmonics;
 };
 
 class PatternMatcher
 {
 public:
   struct Config {
-    std::vector<double> expected_distances;  // Base distances (e.g., [0.185])
+    std::vector<double> expected_distances;
     double distance_tolerance;
-    bool enable_harmonics;  // Match multiples: 1×, 2×, 3× base distance
-    int max_harmonic;       // Maximum harmonic to check (default: 3)
-    bool require_colinear;  // NEW: Enforce strict colinearity
-    double colinearity_tolerance;  // NEW: Max deviation from line (m)
-    int min_poles_for_pattern;  // NEW: Minimum poles to confirm pattern
+    bool enable_harmonics;
+    int max_harmonic;
+    bool require_colinear;
+    double colinearity_tolerance;
+    int min_poles_for_pattern;
     bool publish_debug;
     
     Config()
       : expected_distances({0.185})
-      , distance_tolerance(0.01)  // ±1cm (stricter)
-      , enable_harmonics(false)    // DISABLED for strict colinearity
+      , distance_tolerance(0.015)
+      , enable_harmonics(false)
       , max_harmonic(1)
-      , require_colinear(true)     // ENFORCE colinearity
-      , colinearity_tolerance(0.01) // ±2cm from line
-      , min_poles_for_pattern(3)   // At least 4 poles in line
+      , require_colinear(true)
+      , colinearity_tolerance(0.02)
+      , min_poles_for_pattern(4)
       , publish_debug(false)
     {}
   };
@@ -56,6 +56,11 @@ private:
   Config config_;
   rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr matrix_pub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr matches_pub_;
+  
+  // NEW: Strict colinearity methods
+  bool arePolesColinear(const std::vector<TrackedPole>& poles) const;
+  std::vector<TrackedPole> sortPolesAlongLine(const std::vector<TrackedPole>& poles) const;
+  std::map<std::pair<int, int>, double> createDistanceMap(const std::vector<TrackedPole>& poles) const;
   
   void publishDistanceMatrix(
     const std::map<std::pair<int, int>, double>& distances,

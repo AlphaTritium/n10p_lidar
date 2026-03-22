@@ -6,18 +6,34 @@
 namespace pole_detection
 {
 
+PatternMatcher::PatternMatcher(rclcpp::Node::SharedPtr node, const Config& config)
+  : node_(node), config_(config)
+{
+  if (config_.publish_debug) {
+    matrix_pub_ = node_->create_publisher<std_msgs::msg::Float32MultiArray>(
+      "/debug/distance_matrix", 10);
+    matches_pub_ = node_->create_publisher<visualization_msgs::msg::MarkerArray>(
+      "/debug/pattern_matches", 10);
+    RCLCPP_INFO(node_->get_logger(), "PatternMatcher debug publishing ENABLED");
+  }
+  
+  RCLCPP_INFO(node_->get_logger(), 
+    "PatternMatcher initialized: %d poles expected, spacing=%.3fm",
+    config_.min_poles_for_pattern, config_.expected_distances[0]);
+}
+
 PatternMatchResult PatternMatcher::match(const std::vector<TrackedPole>& poles)
 {
   PatternMatchResult result;
   
-  if (poles.size() < config_.min_poles_for_pattern) {
+  if (poles.size() < static_cast<size_t>(config_.min_poles_for_pattern)) {
     result.matches = 0;
     result.total_pairs = 0;
     result.match_ratio = 0.0;
     return result;
   }
   
-  // Step 1: Check if all poles are colinear using RANSAC-like approach
+  // Step 1: Check if all poles are colinear
   if (!arePolesColinear(poles)) {
     RCLCPP_DEBUG(node_->get_logger(),
       "Poles are not colinear (tolerance: %.2fm)", config_.colinearity_tolerance);
@@ -30,7 +46,7 @@ PatternMatchResult PatternMatcher::match(const std::vector<TrackedPole>& poles)
   // Step 2: Sort poles along the line
   std::vector<TrackedPole> sorted_poles = sortPolesAlongLine(poles);
   
-  if (sorted_poles.size() < config_.min_poles_for_pattern) {
+  if (sorted_poles.size() < static_cast<size_t>(config_.min_poles_for_pattern)) {
     result.matches = 0;
     result.total_pairs = 0;
     result.match_ratio = 0.0;
@@ -39,18 +55,16 @@ PatternMatchResult PatternMatcher::match(const std::vector<TrackedPole>& poles)
   
   // Step 3: Check consecutive distances (must be ~185mm)
   result.matches = 0;
-  result.total_pairs = sorted_poles.size() - 1;  // Consecutive pairs only
+  result.total_pairs = static_cast<int>(sorted_poles.size()) - 1;
   
   for (size_t i = 0; i < sorted_poles.size() - 1; ++i) {
     double dx = sorted_poles[i].position.x - sorted_poles[i+1].position.x;
     double dy = sorted_poles[i].position.y - sorted_poles[i+1].position.y;
     double distance = std::hypot(dx, dy);
     
-    // Check if distance matches expected spacing (±tolerance)
-    bool matched = false;
+    // Check if distance matches expected spacing
     for (const auto& expected : config_.expected_distances) {
       if (std::abs(distance - expected) <= config_.distance_tolerance) {
-        matched = true;
         result.matches++;
         result.matched_pairs.push_back(std::make_pair(sorted_poles[i].track_id, sorted_poles[i+1].track_id));
         result.matched_harmonics[std::make_pair(sorted_poles[i].track_id, sorted_poles[i+1].track_id)] = 1;
@@ -60,11 +74,6 @@ PatternMatchResult PatternMatcher::match(const std::vector<TrackedPole>& poles)
           sorted_poles[i].track_id, sorted_poles[i+1].track_id,
           distance, expected, config_.distance_tolerance);
         break;
-      } else {
-        RCLCPP_DEBUG(node_->get_logger(),
-          "✗ Consecutive poles P%d-P%d: %.3fm (expected %.3f ±%.3fm)",
-          sorted_poles[i].track_id, sorted_poles[i+1].track_id,
-          distance, expected, config_.distance_tolerance);
       }
     }
   }
