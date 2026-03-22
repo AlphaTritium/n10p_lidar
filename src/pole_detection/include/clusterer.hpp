@@ -21,9 +21,9 @@ public:
     bool publish_debug_markers;
     
     Config()
-      : cluster_tolerance(0.04)
-      , cluster_min_size(3)
-      , cluster_max_size(30)
+      : cluster_tolerance(0.05)
+      , cluster_min_size(6)
+      , cluster_max_size(100)
       , publish_debug_markers(false)
     {}
   };
@@ -50,6 +50,7 @@ private:
   double computeAngularSpan(const pcl::PointCloud<pcl::PointXYZI>& points, const geometry_msgs::msg::Point& centroid);
   double computeRadialWidth(const pcl::PointCloud<pcl::PointXYZI>& points);
   double fitCircleCurvature(const pcl::PointCloud<pcl::PointXYZI>& points);
+  double computeConvexHullArea(const pcl::PointCloud<pcl::PointXYZI>& points);  // NEW
   
   void sortPointsByAngle(
     pcl::PointCloud<pcl::PointXYZI>& points,
