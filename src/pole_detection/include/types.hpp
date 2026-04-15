@@ -5,7 +5,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/point.hpp>
 #include <vector>
-#include <string>
+#include <string><Eigen/Dense>
 
 namespace pole_detection
 {
@@ -65,10 +65,78 @@ struct PoleCandidate
   bool is_valid() const { return rejection_reason.empty(); }
 };
 
+struct SimpleKalmanFilter2D {
+  // Simple 2D Kalman filter without Eigen dependency
+  double x, y;           // Position
+  double vx, vy;        // Velocity
+  double Pxx, Pxy, Pyy;  // Position covariance
+  double Pvx, Pvy;       // Velocity covariance
+  
+  // Noise parameters
+  double process_noise_pos = 0.01;  // 1cm position uncertainty per frame
+  double process_noise_vel = 0.05;  // 5cm/s velocity uncertainty per frame
+  double measurement_noise = 0.02;  // 2cm measurement uncertainty
+  
+  SimpleKalmanFilter2D(double x_init, double y_init) 
+    : x(x_init), y(y_init), vx(0.0), vy(0.0),
+      Pxx(10.0), Pxy(0.0), Pyy(10.0), Pvx(1.0), Pvy(1.0) {}
+  
+  void predict(double dt) {
+    // Predict position: x = x + vx*dt
+    x += vx * dt;
+    y += vy * dt;
+    
+    // Predict covariance
+    Pxx += 2 * dt * Pvx + process_noise_pos * dt;
+    Pyy += 2 * dt * Pvy + process_noise_pos * dt;
+    Pvx += process_noise_vel * dt;
+    Pvy += process_noise_vel * dt;
+  }
+  
+  void update(double x_meas, double y_meas, double confidence) {
+    // Measurement noise scaled by confidence
+    double effective_noise = measurement_noise / std::max(confidence, 0.1);
+    
+    // Kalman gain for x
+    double Kx = Pxx / (Pxx + effective_noise);
+    // Kalman gain for y
+    double Ky = Pyy / (Pyy + effective_noise);
+    
+    // Update position
+    x += Kx * (x_meas - x);
+    y += Ky * (y_meas - y);
+    
+    // Update velocity (simple estimation)
+    vx = 0.8 * vx + 0.2 * (x_meas - x);
+    vy = 0.8 * vy + 0.2 * (y_meas - y);
+    
+    // Update covariance
+    Pxx = (1 - Kx) * Pxx;
+    Pyy = (1 - Ky) * Pyy;
+  }
+  
+  geometry_msgs::msg::Point getPosition() const {
+    geometry_msgs::msg::Point pos;
+    pos.x = x;
+    pos.y = y;
+    pos.z = 0.05;  // Fixed height
+    return pos;
+  }
+  
+  double getVelocity() const {
+    return std::hypot(vx, vy);
+  }
+  
+  double getPositionUncertainty() const {
+    return std::sqrt(Pxx + Pyy);
+  }
+};
+
 struct TrackedPole
 {
   int track_id;
-  geometry_msgs::msg::Point position;
+  geometry_msgs::msg::Point position;  // KEEP THIS - used throughout codebase
+  SimpleKalmanFilter2D filter;
   double avg_features_confidence;
   int detection_count;
   int invisible_count;
@@ -78,14 +146,25 @@ struct TrackedPole
   bool is_active;
   
   TrackedPole(int id, const geometry_msgs::msg::Point& pos, double confidence, rclcpp::Time stamp)
-    : track_id(id), position(pos), avg_features_confidence(confidence), detection_count(1),
+    : track_id(id), position(pos), filter(pos.x, pos.y), avg_features_confidence(confidence), detection_count(1),
       invisible_count(0), first_seen(stamp), last_seen(stamp),
       is_confirmed(false), is_active(true) {}
   
   void update(const geometry_msgs::msg::Point& pos, double confidence, rclcpp::Time stamp, int confirmation_threshold = 5) {
-    position.x = 0.8 * position.x + 0.2 * pos.x;
-    position.y = 0.8 * position.y + 0.2 * pos.y;
-    position.z = 0.05;
+    // Calculate time delta for prediction
+    double dt = (stamp - last_seen).seconds();
+    if (dt > 0.5) dt = 0.1;  // Limit for large gaps
+    
+    // Predict state forward
+    filter.predict(dt);
+    
+    // Update with new measurement
+    filter.update(pos.x, pos.y, confidence);
+    
+    // Update position from Kalman filter
+    position = filter.getPosition();
+    
+    // Update tracking statistics
     avg_features_confidence = 0.9 * avg_features_confidence + 0.1 * confidence;
     last_seen = stamp;
     detection_count++;
@@ -95,6 +174,11 @@ struct TrackedPole
   
   void markInvisible() { invisible_count++; }
   bool isStale(int max_invisible = 20) const { return invisible_count > max_invisible; }
+  
+  // Keep getPosition for backward compatibility
+  geometry_msgs::msg::Point getPosition() const { return position; }
+  double getVelocity() const { return filter.getVelocity(); }
+  double getUncertainty() const { return filter.getPositionUncertainty(); }
 };
 
 struct ClusterDebugInfo

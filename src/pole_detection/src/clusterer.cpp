@@ -167,6 +167,9 @@ double Clusterer::computeConvexHullArea(const pcl::PointCloud<pcl::PointXYZI>& p
 {
   if (points.size() < 3) return 0.0;
   
+  // Statistical area estimation - robust to jumpy points
+  // Method: Use variance in radial and tangential directions
+  
   // Compute centroid
   pcl::PointXYZI centroid_3d;
   pcl::computeCentroid(points, centroid_3d);
@@ -176,19 +179,58 @@ double Clusterer::computeConvexHullArea(const pcl::PointCloud<pcl::PointXYZI>& p
   centroid.y = centroid_3d.y;
   centroid.z = 0.0;
   
-  // Sort points angularly
-  pcl::PointCloud<pcl::PointXYZI> sorted_points = points;
-  sortPointsByAngle(sorted_points, centroid);
+  // Calculate radial and tangential variances
+  double sum_radial = 0.0, sum_tangential = 0.0;
+  double sum_radial2 = 0.0, sum_tangential2 = 0.0;
   
-  // Shoelace formula for polygon area
-  double area = 0.0;
-  for (size_t i = 0; i < sorted_points.size(); ++i) {
-    size_t j = (i + 1) % sorted_points.size();
-    area += sorted_points[i].x * sorted_points[j].y;
-    area -= sorted_points[j].x * sorted_points[i].y;
+  for (const auto& pt : points) {
+    double dx = pt.x - centroid.x;
+    double dy = pt.y - centroid.y;
+    double range = std::hypot(dx, dy);
+    double angle = atan2(dy, dx);
+    
+    // Radial component (distance from centroid)
+    sum_radial += range;
+    sum_radial2 += range * range;
+    
+    // Tangential component (angular spread)
+    // Convert angular spread to linear distance at average range
+    double avg_range = sum_radial / (points.size());
+    double angular_spread = 0.0;
+    
+    // For tangential variance, use the maximum angular difference
+    static double last_angle = angle;
+    double angular_diff = std::abs(angle - last_angle);
+    if (angular_diff > M_PI) angular_diff = 2 * M_PI - angular_diff;
+    angular_spread = angular_diff * avg_range;
+    
+    sum_tangential += angular_spread;
+    sum_tangential2 += angular_spread * angular_spread;
+    last_angle = angle;
   }
   
-  return std::abs(area) / 2.0;
+  // Calculate variances
+  double n = points.size();
+  double var_radial = (sum_radial2 - sum_radial * sum_radial / n) / n;
+  double var_tangential = (sum_tangential2 - sum_tangential * sum_tangential / n) / n;
+  
+  // Area estimate: π * (radial_std) * (tangential_std)
+  // This approximates the area of an ellipse that fits the point distribution
+  double area_estimate = M_PI * std::sqrt(var_radial) * std::sqrt(var_tangential);
+  
+  // Fallback: If statistical method fails, use bounding box area
+  if (area_estimate < 1e-6) {
+    double min_x = 1e6, max_x = -1e6, min_y = 1e6, max_y = -1e6;
+    for (const auto& pt : points) {
+      min_x = std::min(min_x, (double)pt.x);
+      max_x = std::max(max_x, (double)pt.x);
+      min_y = std::min(min_y, (double)pt.y);
+      max_y = std::max(max_y, (double)pt.y);
+    }
+    area_estimate = (max_x - min_x) * (max_y - min_y);
+  }
+  
+  return area_estimate;
 }
 
 
