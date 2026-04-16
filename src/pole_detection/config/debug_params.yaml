@@ -1,12 +1,12 @@
-# Debug Configuration - All debug topics ENABLED, optimized for static poles + moving LiDAR
+# Debug Configuration - All debug topics ENABLED, optimized for stable tracking
 pole_detection:
   ros__parameters:
     # ========================================
-    # Clusterer Parameters (TIGHTER for separation)
+    # Clusterer Parameters (RELAXED for stability - from rc2026_head_finder)
     # ========================================
-    cluster_tolerance: 0.04        # Reduced from 0.08 → 4cm for better pole/wall separation
-    cluster_min_size: 3            # Handle very sparse returns (2+ points)
-    cluster_max_size: 30           # Poles are small objects
+    cluster_tolerance: 0.08        # 8cm - proper pole separation (from rc2026)
+    cluster_min_size: 4            # 4 points - filter noise better
+    cluster_max_size: 40           # 40 points - allow full pole detection
     
     # ========================================
     # Validator Parameters (AREA-BASED, NO RADIUS!)
@@ -36,15 +36,15 @@ pole_detection:
     weight_range: 0.10
     
     # ========================================
-    # Tracker Parameters (WORLD-FRAME OPTIMIZED)
+    # Tracker Parameters (TIGHTER for stability - match relaxed clustering)
     # ========================================
     max_tracks: 8                 # Allow extra tracks for debugging
-    association_distance: 0.1       # Tighter in world frame (10cm)
+    association_distance: 0.05     # Tighter in world frame (5cm - match clustering)
     max_invisible_frames: 20       # Keep tracks longer (3 seconds)
     confirmation_threshold: 2       # Confirm faster with multiple viewpoints
     
-    # NEW: rc2026_head_finder improvements
-    ema_alpha: 0.3                # EMA smoothing factor (30% new, 70% old)
+    # NEW: rc2026_head_finder improvements (OPTIMIZED)
+    ema_alpha: 0.15                # EMA smoothing factor (15% new, 85% old - smoother)
     max_jump_distance: 0.5         # Jump detection threshold (50cm)
     
     # ========================================

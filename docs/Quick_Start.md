@@ -52,6 +52,18 @@ ros2 topic echo /track_poles/_action/feedback
 
 ### Real-Time Parameter Tuning
 
+**Quick Parameter Tuning (Recommended for Vibration Fix):**
+
+```bash
+# Apply optimized parameters to fix vibration
+./scripts/tune_parameters.sh
+
+# Compare current vs recommended parameters
+./scripts/compare_parameters.sh
+```
+
+**Manual Parameter Tuning:**
+
 ```bash
 # List all parameters
 ros2 param list | grep pole_detection
@@ -60,10 +72,51 @@ ros2 param list | grep pole_detection
 ros2 param get /pole_detection cluster_tolerance
 
 # Set new value (no restart needed)
-ros2 param set /pole_detection cluster_tolerance 0.05
-ros2 param set /pole_detection ema_alpha 0.5
-ros2 param set /pole_detection max_jump_distance 0.7
+ros2 param set /pole_detection cluster_tolerance 0.08
+ros2 param set /pole_detection ema_alpha 0.15
+ros2 param set /pole_detection max_jump_distance 0.5
 ```
+
+**For detailed parameter tuning guide, see:**
+- [PARAMETER_TUNING_GUIDE.md](file:///home/rc2/FINN/pole/n10p_lidar/docs/PARAMETER_TUNING_GUIDE.md) - Complete vibration fix guide
+
+---
+
+## Vibration Fix Guide
+
+### Problem: Excessive Dot Vibration
+
+**Symptoms:**
+- Tracking dots vibrate excessively even when stationary
+- Jittery movement in RViz
+- Unstable tracking
+
+**Root Cause:**
+- **NOT** algorithm choice (both EMA and Kalman work well)
+- **Parameter mismatch** between clustering and tracking stages
+- Tight clustering + loose association = unstable tracking
+
+**Quick Fix:**
+
+```bash
+# 1. Launch system
+ros2 launch pole_detection pole_detection_debug.launch.py serial_port:=/dev/ttyACM0
+
+# 2. Apply optimized parameters
+./scripts/tune_parameters.sh
+
+# 3. Monitor improvement
+ros2 topic echo /debug/tracks
+```
+
+**Expected Results:**
+- ✅ Stable tracking dots (minimal vibration)
+- ✅ Smooth position updates
+- ✅ No jumping between poles
+- ✅ High tracking confidence
+
+**For detailed troubleshooting, see:**
+- [PARAMETER_TUNING_GUIDE.md](file:///home/rc2/FINN/pole/n10p_lidar/docs/PARAMETER_TUNING_GUIDE.md)
 
 ---
 
@@ -386,61 +439,77 @@ ros2 launch pole_detection pole_detection_debug.launch.py \
 
 ### What You'll See in RViz
 
-When you launch in debug mode, RViz will display comprehensive visualization of the entire detection pipeline:
+When you launch in debug mode, RViz will display **comprehensive enhanced visualization** of the entire detection pipeline with detailed labels, markers, and real-time statistics.
 
-| Display Type | Topic | Color | Meaning |
-|-------------|-------|-------|---------|
-| **Raw Clusters** | `/debug/clusters_raw` | 🟠 Orange | All candidate clusters (including invalid ones) |
-| **Validated Poles** | `/debug/validated_poles` | 🟢 Green | Accepted pole candidates with scores |
-| **Rejected Poles** | `/debug/rejected_poles` | 🟡 Yellow | Rejected clusters with rejection reasons |
-| **Tracked Poles** | `/debug/tracks` | 🔵 Blue/🟢 Green | Tracked poles (blue=tentative, green=confirmed) |
-| **Pattern Matches** | `/debug/pattern_matches` | 🟢 Red/Green Lines | Pole spacing (green=185mm match) |
-| **Pipeline Status** | `/debug/pipeline` | 📊 Text | Real-time pipeline statistics and flow |
+**For complete visualization guide, see:**
+- [ENHANCED_VISUALIZATION_GUIDE.md](file:///home/rc2/FINN/pole/n10p_lidar/docs/ENHANCED_VISUALIZATION_GUIDE.md) - Complete visualization reference
+
+### Enhanced Visualization Features
+
+| Display Type | Topic | Color | Labels | Meaning |
+|-------------|-------|-------|---------|---------|
+| **Raw Clusters** | `/debug/clusters_raw` | 🟠 Orange | "C0", "C1", "C2"... | All candidate clusters with IDs |
+| **Validated Poles** | `/debug/validated_poles` | 🟢 Green | "85%", "92%"... | Accepted poles with confidence scores |
+| **Rejected Poles** | `/debug/rejected_poles` | 🔴 Red | "Too few points", "Wrong width"... | Rejected clusters with reasons |
+| **Tracked Poles** | `/debug/tracks` | 🟢 Green/🟡 Yellow | "T0", "T1", "T2"... | Tracked poles with IDs + arrows |
+| **Pattern Matches** | `/debug/pattern_matches` | 🟢 Green Lines | "185mm", "187mm"... | Pole spacing with distances |
+| **Pipeline Status** | `/debug/pipeline` | 📊 Text + Bars | Statistics + Progress bars | Real-time pipeline monitoring |
+
+### Key Enhancements
+
+✅ **Larger, more visible markers** (8-12cm diameter)  
+✅ **Detailed text labels** on all markers  
+✅ **Rejection reasons** on rejected poles  
+✅ **Confidence scores** on validated poles  
+✅ **Distance measurements** on pattern matches  
+✅ **Pipeline statistics** with progress bars  
+✅ **Real-time performance metrics**  
 
 ### Understanding Pipeline Visualization
 
-The `/debug/pipeline` topic shows complete data flow:
+The `/debug/pipeline` topic shows complete data flow with enhanced statistics:
 
 ```
-PIPELINE STATUS:
-Raw Clusters: 12
+=== PIPELINE STATUS ===
+Candidates: 12
 Validated: 6
+Rejected: 3
 Tracked: 6
-Pattern Match: 100%
-
-PERFORMANCE:
-Processing Rate: 10Hz
-Latency: <10ms
-Action Feedback: 10Hz
+Pattern Matches: 5/5
+Pattern Ratio: 100.00%
 ```
 
-**Stage Indicators**: Shows active processing stages (Clusterer → Validator → Tracker → Pattern)
+**Stage Progress Bars**: Visual representation of each pipeline stage count
 
-### Key Visual Indicators
+### Quick Visual Diagnostics
 
 1. **Orange Spheres Everywhere?**
    - **Problem**: Clustering too sensitive
-   - **Solution**: Increase `cluster_tolerance` to 0.05m
-   - **Command**: `ros2 param set /pole_detection cluster_tolerance 0.05`
+   - **Solution**: Increase `cluster_tolerance` to 0.08m
+   - **Command**: `ros2 param set /pole_detection cluster_tolerance 0.08`
 
 2. **No Green Spheres?**
    - **Problem**: Validation too strict
-   - **Solution**: Check yellow labels for rejection reasons, adjust thresholds
-   - **Command**: `ros2 param set /pole_detection min_point_count 2`
+   - **Solution**: Check red labels for rejection reasons, adjust thresholds
+   - **Command**: `ros2 param set /pole_detection min_point_count 3`
 
-3. **Blue/Green Flickering?**
-   - **Problem**: Tracking unstable
-   - **Solution**: Adjust `association_distance` to 0.08m
-   - **Command**: `ros2 param set /pole_detection association_distance 0.08`
+3. **Yellow Spheres (Tentative Tracks)?**
+   - **Problem**: Tracking not confirmed yet
+   - **Solution**: Wait for 3+ detections or adjust `confirmation_threshold`
+   - **Command**: `ros2 param set /pole_detection confirmation_threshold 2`
 
-4. **Red Lines Between Poles?**
-   - **Problem**: Spacing incorrect (not 185mm ±15mm)
-   - **Solution**: Check pole placement or adjust `distance_match_tolerance`
-   - **Command**: `ros2 param set /pole_detection distance_match_tolerance 0.02`
+4. **No Green Lines?**
+   - **Problem**: Spacing incorrect (not 185mm ±10mm)
+   - **Solution**: Check pole placement or adjust `distance_tolerance`
+   - **Command**: `ros2 param set /pole_detection distance_tolerance 0.01`
 
-5. **Pipeline Shows "Pattern Match: 0%"**
-   - **Problem**: Poles not colinear or wrong spacing
-   - **Solution**: Check pole alignment and spacing
+5. **Many Red Spheres?**
+   - **Problem**: Validation rejecting too many candidates
+   - **Solution**: Read rejection labels, adjust parameters accordingly
+   - **Command**: Check red labels for specific reasons
+
+**For detailed visualization guide and troubleshooting, see:**
+- [ENHANCED_VISUALIZATION_GUIDE.md](file:///home/rc2/FINN/pole/n10p_lidar/docs/ENHANCED_VISUALIZATION_GUIDE.md)
 
 ---
 

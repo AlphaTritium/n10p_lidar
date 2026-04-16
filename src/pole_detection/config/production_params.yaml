@@ -14,11 +14,11 @@ pole_detection:
     min_intensity: 50.0
     
     # ========================================
-    # Clusterer Parameters (OPTIMIZED FOR STATIC POLES)
+    # Clusterer Parameters (RELAXED for stability - from rc2026_head_finder)
     # ========================================
-    cluster_tolerance: 0.03        # 3cm - tight for clean separation
-    cluster_min_size: 3            # Handle sparse returns
-    cluster_max_size: 25           # Poles are small
+    cluster_tolerance: 0.08        # 8cm - proper pole separation (from rc2026)
+    cluster_min_size: 4            # 4 points - filter noise better
+    cluster_max_size: 35           # 35 points - allow full pole detection
     
     # ========================================
     # validator Parameters (STRICT FILTERING)
@@ -45,15 +45,15 @@ pole_detection:
     min_intensity: 50.0
     
     # ========================================
-    # Tracker Parameters (CONSERVATIVE)
+    # Tracker Parameters (TIGHTER for stability - match relaxed clustering)
     # ========================================
     max_tracks: 8                  # Reasonable limit
-    association_distance: 0.08     # Very tight in world frame (8cm)
+    association_distance: 0.05     # Very tight in world frame (5cm - match clustering)
     max_invisible_frames: 25       # Moderate persistence
     confirmation_threshold: 3      # Require 3 detections
     
-    # NEW: rc2026_head_finder improvements
-    ema_alpha: 0.3                # EMA smoothing factor (30% new, 70% old)
+    # NEW: rc2026_head_finder improvements (OPTIMIZED)
+    ema_alpha: 0.10                # EMA smoothing factor (10% new, 90% old - very smooth)
     max_jump_distance: 0.5         # Jump detection threshold (50cm)
     
     # ========================================

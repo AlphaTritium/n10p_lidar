@@ -3,7 +3,7 @@
 <package format="3">
   <name>pole_detection</name>
   <version>1.0.0</version>
-  <description>Modular pole detection system with transparent debugging for LiDAR-based pole identification</description>
+  <description>Simplified pole detection system for LiDAR-based pole identification</description>
   
   <maintainer email="your.email@example.com">Your Name</maintainer>
   <license>Apache-2.0</license>
@@ -19,11 +19,9 @@
   <build_depend>visualization_msgs</build_depend>
   <build_depend>lslidar_msgs</build_depend>
   <build_depend>pcl_conversions</build_depend>
-  <build_depend>pcl_ros</build_depend>
   <build_depend>libpcl-all-dev</build_depend>
   <build_depend>rclcpp_action</build_depend>
   <build_depend>rc2026_interfaces</build_depend>
-  <build_depend>tf2_ros</build_depend>
   
   <!-- Execution dependencies -->
   <exec_depend>rclcpp</exec_depend>
@@ -33,13 +31,9 @@
   <exec_depend>visualization_msgs</exec_depend>
   <exec_depend>lslidar_msgs</exec_depend>
   <exec_depend>pcl_conversions</exec_depend>
-  <exec_depend>pcl_ros</exec_depend>
   <exec_depend>libpcl-all</exec_depend>
   <exec_depend>rclcpp_action</exec_depend>
   <exec_depend>rc2026_interfaces</exec_depend>
-  <exec_depend>tf2_ros</exec_depend>
-  <exec_depend>rviz2</exec_depend>
-  <exec_depend>lslidar_driver</exec_depend>
   <exec_depend>rosidl_default_runtime</exec_depend>
   
   <member_of_group>rosidl_interface_packages</member_of_group>

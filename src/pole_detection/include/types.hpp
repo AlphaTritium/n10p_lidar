@@ -6,6 +6,7 @@
 #include <geometry_msgs/msg/point.hpp>
 #include <vector>
 #include <string>
+#include <utility>
 
 namespace pole_detection
 {
@@ -122,6 +123,20 @@ struct ClusterDebugInfo
   geometry_msgs::msg::Point centroid;
   bool was_accepted;
   std::string reason;
+};
+
+struct PatternMatchResult
+{
+  int matches;
+  int total_pairs;
+  double match_ratio;
+  std::vector<std::pair<int, int>> matched_pairs;
+  
+  PatternMatchResult()
+    : matches(0)
+    , total_pairs(0)
+    , match_ratio(0.0)
+  {}
 };
 
 }  // namespace pole_detection
