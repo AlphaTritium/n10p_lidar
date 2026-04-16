@@ -35,6 +35,7 @@ find_package(pcl_conversions REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(rc2026_interfaces REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
 
 # Include directories
 include_directories(
@@ -43,6 +44,7 @@ include_directories(
   ${PCL_COMMON_INCLUDE_DIRS}
   ${Boost_INCLUDE_DIRS}
   ${pcl_conversions_INCLUDE_DIRS}
+  ${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp
 )
 
 # Link directories
@@ -52,6 +54,12 @@ link_directories(
 
 # Add definitions for PCL
 add_definitions(${PCL_DEFINITIONS})
+
+# Generate action interfaces FIRST (before executables)
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "action/TrackPoles.action"
+  DEPENDENCIES std_msgs geometry_msgs
+)
 
 # ============================================
 # Executable: pole_detection_node (Main orchestrator)
@@ -66,6 +74,9 @@ add_executable(pole_detection_node
   src/pattern_matcher.cpp
 )
 
+# Add dependency on generated action interface
+add_dependencies(pole_detection_node ${PROJECT_NAME}__rosidl_typesupport_cpp)
+
 target_include_directories(pole_detection_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
@@ -79,10 +90,12 @@ ament_target_dependencies(pole_detection_node
   visualization_msgs
   lslidar_msgs
   pcl_conversions
+  rclcpp_action
 )
 
 target_link_libraries(pole_detection_node
   ${PCL_LIBRARIES}
+  ${PROJECT_NAME}__rosidl_typesupport_cpp
 )
 
 # ============================================

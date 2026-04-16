@@ -56,7 +56,11 @@ std::vector<TrackedPole> Tracker::update(
         confidence = 0.5;
       }
       
-      tracks_[best_track_idx].update(detection.centroid, confidence, current_time, config_.confirmation_threshold);
+      // Use new parameters from rc2026_head_finder
+      tracks_[best_track_idx].update(detection.centroid, confidence, current_time, 
+                                     config_.confirmation_threshold, 
+                                     config_.ema_alpha, 
+                                     config_.max_jump_distance);
       detection_matched[i] = true;
       
       RCLCPP_DEBUG(node_->get_logger(),

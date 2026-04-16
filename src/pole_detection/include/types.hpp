@@ -82,9 +82,23 @@ struct TrackedPole
       invisible_count(0), first_seen(stamp), last_seen(stamp),
       is_confirmed(false), is_active(true) {}
   
-  void update(const geometry_msgs::msg::Point& pos, double confidence, rclcpp::Time stamp, int confirmation_threshold = 5) {
-    position.x = 0.8 * position.x + 0.2 * pos.x;
-    position.y = 0.8 * position.y + 0.2 * pos.y;
+  void update(const geometry_msgs::msg::Point& pos, double confidence, rclcpp::Time stamp, 
+             int confirmation_threshold = 5, double ema_alpha = 0.3, double max_jump_distance = 0.5) {
+    // Smart EMA with jump detection from rc2026_head_finder
+    double jump_dist = std::hypot(pos.x - position.x, pos.y - position.y);
+    
+    if (jump_dist > max_jump_distance) {
+      // Immediate reset on large jumps (target switch detection)
+      position.x = pos.x;
+      position.y = pos.y;
+      RCLCPP_INFO(rclcpp::get_logger("pole_detection"), 
+          "Jump detected (%.3fm) - resetting track %d", jump_dist, track_id);
+    } else {
+      // Normal EMA smoothing with configurable alpha
+      position.x = ema_alpha * pos.x + (1.0 - ema_alpha) * position.x;
+      position.y = ema_alpha * pos.y + (1.0 - ema_alpha) * position.y;
+    }
+    
     position.z = 0.05;
     avg_features_confidence = 0.9 * avg_features_confidence + 0.1 * confidence;
     last_seen = stamp;

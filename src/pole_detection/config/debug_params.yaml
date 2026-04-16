@@ -43,6 +43,10 @@ pole_detection:
     max_invisible_frames: 20       # Keep tracks longer (3 seconds)
     confirmation_threshold: 2       # Confirm faster with multiple viewpoints
     
+    # NEW: rc2026_head_finder improvements
+    ema_alpha: 0.3                # EMA smoothing factor (30% new, 70% old)
+    max_jump_distance: 0.5         # Jump detection threshold (50cm)
+    
     # ========================================
     # Pattern Matcher Parameters (HARMONICS + WORLD)
     # ========================================

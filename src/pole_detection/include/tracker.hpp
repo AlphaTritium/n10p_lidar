@@ -19,12 +19,18 @@ public:
     int confirmation_threshold;
     bool publish_debug_tracks;
     
+    // New parameters from rc2026_head_finder
+    double ema_alpha;           // EMA smoothing factor (0.0-1.0)
+    double max_jump_distance;    // Jump detection threshold (meters)
+    
     Config()
       : max_tracks(6)
       , association_distance(0.15)
       , max_invisible_frames(20)
       , confirmation_threshold(3)
       , publish_debug_tracks(false)
+      , ema_alpha(0.3)           // 30% new, 70% old (from rc2026_head_finder)
+      , max_jump_distance(0.5)     // 50cm jump threshold
     {}
   };
   

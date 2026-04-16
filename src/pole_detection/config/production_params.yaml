@@ -52,6 +52,10 @@ pole_detection:
     max_invisible_frames: 25       # Moderate persistence
     confirmation_threshold: 3      # Require 3 detections
     
+    # NEW: rc2026_head_finder improvements
+    ema_alpha: 0.3                # EMA smoothing factor (30% new, 70% old)
+    max_jump_distance: 0.5         # Jump detection threshold (50cm)
+    
     # ========================================
     # Pattern Matcher Parameters (PRECISE)
     # ========================================

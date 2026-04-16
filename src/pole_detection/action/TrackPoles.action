@@ -1,0 +1,12 @@
+# Goal
+bool start_tracking
+---
+# Result
+bool success
+---
+# Feedback
+float32 closest_y_offset
+int32 pole_count
+float32 pattern_confidence
+float32 closest_distance
+float32 tracking_confidence
