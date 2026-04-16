@@ -12,8 +12,8 @@ pole_detection:
     # Validator Parameters (AREA-BASED, NO RADIUS!)
     # ========================================
     # Point count filtering
-    min_point_count: 3             # Minimum 3 points (hallucination prevention)
-    max_point_count: 30            # Maximum points
+    min_point_count: 3.0           # Minimum 3 points (hallucination prevention)
+    max_point_count: 30.0           # Maximum points
     
     # Bounding box area filtering (REPLACES RADIUS!)
     # Expected pole area: 3mm×3mm to 50mm×50mm
