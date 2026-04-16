@@ -1,8 +1,8 @@
-# Goal (TX):
-bool task_complete  # Start alignment when true
+# Goal
+bool task_complete
 ---
-# Result: 
-bool success         
+# Result
+bool success
 ---
-# Feedback (RX):      
-bool task_state       # Task progress: 0=aligning, 1=finished
+# Feedback
+bool task_state
