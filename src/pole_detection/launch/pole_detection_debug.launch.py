@@ -52,7 +52,7 @@ def generate_launch_description():
             ]
         ),
         
-        # Gripper Control Action Server
+        # Gripper Control Action Server (Behavior Tree Compatible)
         Node(
             package='pole_detection',
             executable='action_server',
@@ -89,6 +89,6 @@ def generate_launch_description():
         
         LogInfo(msg=[
             '🔍 Pole Detection System launched in DEBUG mode ',
-            '(all debug topics enabled - DO NOT use in production)'
+            '(Behavior Tree compatible action server enabled)'
         ]),
     ])
