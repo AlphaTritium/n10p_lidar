@@ -75,3 +75,4 @@ pole_detection:
     publish_debug_validation: true
     publish_debug_tracks: true
     publish_debug_pattern: true
+    publish_pipeline_debug: true      # NEW: Comprehensive pipeline visualization

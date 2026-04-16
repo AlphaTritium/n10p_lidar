@@ -13,6 +13,8 @@
 #include <thread>
 #include <mutex>
 #include <atomic>
+#include <vector>
+#include <sstream>
 #include <pole_detection/action/track_poles.hpp>
 
 namespace pole_detection
@@ -50,6 +52,7 @@ private:
   // Publishers
   rclcpp::Publisher<lslidar_msgs::msg::DetectedObjects>::SharedPtr objects_pub_;
   rclcpp::Publisher<lslidar_msgs::msg::DetectedObjects>::SharedPtr poles_pub_;
+  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pipeline_debug_pub_;
   
   // Pipeline modules (Preprocessor removed - using raw cloud directly)
   std::unique_ptr<Clusterer> clusterer_;
@@ -64,6 +67,12 @@ private:
   void ensureModulesInitialized();
   void initializeModules();
   void cloudCallback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr& msg);
+  void publishPipelineDebug(
+    const std::vector<PoleCandidate>& candidates,
+    const std::vector<PoleCandidate>& validated,
+    const std::vector<TrackedPole>& tracked,
+    const PatternMatchResult& match_result,
+    const std_msgs::msg::Header& header);
 };
 
 }  // namespace pole_detection

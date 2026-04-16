@@ -106,6 +106,18 @@ Visualization Manager:
       Topic: /debug/pattern_matches
       Unreliable: false
       Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Pipeline Status
+      Namespaces:
+        pipeline_connections: true
+        pipeline_flow: true
+        pipeline_performance: true
+        pipeline_stages: true
+        pipeline_stats: true
+      Topic: /debug/pipeline
+      Unreliable: false
+      Value: true
     - Class: rviz_default_plugins/TF
       Enabled: true
       Frame Timeout: 1

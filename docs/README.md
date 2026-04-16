@@ -367,7 +367,7 @@ void PoleDetectionNode::feedbackLoop(
 
 #### **动作服务器**：`/track_poles`
 
-**动作类型**：`pole_detection/action/TrackPoles`
+**动作类型**：`TrackPoles`
 
 **目标**：
 
@@ -397,6 +397,22 @@ result TrackPoles {
 }
 ```
 
+**使用方法**：
+
+```bash
+# 发送动作目标（正确命令）
+ros2 action send_goal /track_poles pole_detection/action/TrackPoles "{start_tracking: true}" --feedback
+
+# 监控动作反馈（正确命令）
+ros2 topic echo /track_poles/_action/feedback
+
+# 查看动作信息
+ros2 action info /track_poles
+
+# 取消动作
+ros2 action send_goal /track_poles pole_detection/action/TrackPoles "{start_tracking: false}"
+```
+
 **行为**：
 
 - 监控 `/detected_poles` 话题
@@ -404,19 +420,6 @@ result TrackPoles {
 - 10Hz 反馈循环
 - 支持取消
 - 线程安全数据访问
-
-**使用示例**：
-
-```bash
-# 发送动作目标
-ros2 action send /track_poles pole_detection/action/TrackPoles "{start_tracking: true}"
-
-# 监控动作反馈
-ros2 action feedback /track_poles
-
-# 取消动作
-ros2 action cancel /track_poles
-```
 
 ---
 
@@ -706,9 +709,304 @@ ros2 launch pole_detection pole_detection_debug.launch.py serial_port:=/dev/ttyA
 - ✅ 控制台显示："Pipeline: Clusterer → Validator → Tracker → PatternMatcher"
 - ✅ 动作服务器启动："/track_poles"
 
-### **9.2 调试工作流程**
+### **9.2 完整调试工作流程**
 
-#### **9.2.1 可视化调试（RViz）**
+#### **阶段 1：系统启动验证**
+
+##### **步骤 1.1：验证 ROS2 环境**
+```bash
+# 检查 ROS2 是否已加载
+echo $ROS_DISTRO
+# 预期：humble
+
+# 检查工作空间是否已加载
+echo $AMENT_PREFIX_PATH
+# 应包含工作空间路径
+```
+
+##### **步骤 1.2：构建和加载**
+```bash
+# 清理构建（代码更改后推荐）
+rm -rf build install log
+colcon build --packages-select pole_detection lslidar_driver
+
+# 加载工作空间
+source install/setup.bash
+```
+
+##### **步骤 1.3：启动系统**
+```bash
+# 以调试模式启动并打开 RViz
+ros2 launch pole_detection pole_detection_debug.launch.py serial_port:=/dev/ttyACM0
+```
+
+**预期输出：**
+```
+[INFO] [lslidar_driver_node]: LiDAR driver initialized
+[INFO] [pole_detection]: Pole Detection Node initialized
+[INFO] [pole_detection]: Pipeline: Clusterer → Validator → Tracker → PatternMatcher
+[INFO] [pole_detection]: BT-Ready Action Server Started: /track_poles
+[INFO] [pole_detection]: Clusterer debug publishing ENABLED
+[INFO] [pole_detection]: Validator debug publishing ENABLED
+[INFO] [pole_detection]: Tracker debug publishing ENABLED
+[INFO] [pole_detection]: Pattern matcher debug publishing ENABLED
+[INFO] [pole_detection]: Pipeline debug publishing ENABLED
+```
+
+#### **阶段 2：硬件验证**
+
+##### **步骤 2.1：检查 LiDAR 连接**
+```bash
+# 检查 LiDAR 设备权限
+ls -l /dev/ttyACM0
+# 预期：crw-rw-rw-（读写权限）
+
+# 如需要，修复权限
+sudo chmod 666 /dev/ttyACM0
+
+# 检查 LiDAR 节点是否运行
+ros2 node list | grep lslidar
+# 预期：/lslidar_driver_node
+```
+
+##### **步骤 2.2：验证 LiDAR 数据**
+```bash
+# 检查 LiDAR 是否在发布
+ros2 topic hz /lslidar_point_cloud
+# 预期：~10Hz
+
+# 检查点云数据
+ros2 topic echo /lslidar_point_cloud --once
+# 应看到 PointCloud2 消息
+```
+
+**如果没有 LiDAR 数据：**
+- 检查 LiDAR 电源：`lsusb | grep LiDAR`
+- 检查串口：`dmesg | grep ttyACM`
+- 检查 LiDAR 节点：`ros2 node list`
+- 如需要，重启 LiDAR
+
+#### **阶段 3：话题验证**
+
+##### **步骤 3.1：验证所有调试话题**
+```bash
+# 列出所有调试话题
+ros2 topic list | grep debug
+```
+
+**预期输出：**
+```
+/debug/clusters_raw
+/debug/validated_poles
+/debug/rejected_poles
+/debug/tracks
+/debug/pattern_matches
+/debug/pipeline
+```
+
+##### **步骤 3.2：检查每个调试话题**
+```bash
+# 检查原始聚类
+ros2 topic hz /debug/clusters_raw
+# 预期：~10Hz
+
+# 检查已验证的杆
+ros2 topic hz /debug/validated_poles
+# 预期：~10Hz
+
+# 检查跟踪的杆
+ros2 topic hz /debug/tracks
+# 预期：~10Hz
+
+# 检查管道状态
+ros2 topic hz /debug/pipeline
+# 预期：~10Hz
+```
+
+##### **步骤 3.3：验证输出话题**
+```bash
+# 检查检测到的杆
+ros2 topic hz /detected_poles
+# 预期：~10Hz
+
+# 查看检测到的杆数据
+ros2 topic echo /detected_poles --once
+# 应看到 DetectedObjects 消息
+```
+
+#### **阶段 4：动作服务器验证**
+
+##### **步骤 4.1：检查动作服务器**
+```bash
+# 列出所有动作
+ros2 action list
+```
+
+**预期输出：**
+```
+/task/gripper_control
+/track_poles
+```
+
+##### **步骤 4.2：获取动作信息**
+```bash
+# 获取详细动作信息
+ros2 action info /track_poles
+```
+
+**预期输出：**
+```
+Action: /track_poles
+Action Type: pole_detection/action/TrackPoles
+Action Definition:
+  Goal:
+    bool start_tracking
+  Result:
+    bool success
+  Feedback:
+    float32 closest_y_offset
+    int32 pole_count
+    float32 pattern_confidence
+    float32 closest_distance
+    float32 tracking_confidence
+```
+
+##### **步骤 4.3：测试动作服务器**
+
+```bash
+# 发送动作目标（正确命令）
+ros2 action send_goal /track_poles pole_detection/action/TrackPoles "{start_tracking: true}" --feedback
+```
+
+**预期输出：**
+```
+Waiting for an action server to become available...
+Sending goal...
+Goal accepted with ID: 1
+Feedback:
+  closest_y_offset: 0.123
+  pole_count: 6
+  pattern_confidence: 1.0
+  closest_distance: 0.456
+  tracking_confidence: 0.95
+...
+Goal finished with status: SUCCEEDED
+```
+
+##### **步骤 4.4：监控动作反馈**
+```bash
+# 实时监控动作反馈（正确命令）
+ros2 topic echo /track_poles/_action/feedback
+```
+
+**预期连续输出：**
+```
+---
+feedback:
+  closest_y_offset: 0.123
+  pole_count: 6
+  pattern_confidence: 1.0
+  closest_distance: 0.456
+  tracking_confidence: 0.95
+---
+feedback:
+  closest_y_offset: 0.124
+  pole_count: 6
+  pattern_confidence: 1.0
+  closest_distance: 0.457
+  tracking_confidence: 0.96
+---
+```
+
+#### **阶段 5：RViz 可视化验证**
+
+##### **步骤 5.1：检查 RViz 显示**
+在 RViz 中，验证这些显示已启用：
+
+**必需的显示：**
+1. ✅ **Grid** - 参考坐标系
+2. ✅ **LiDAR Raw Data** - 点云显示
+3. ✅ **Raw Clusters** - 橙色球体
+4. ✅ **Validated Poles** - 绿色球体
+5. ✅ **Rejected Poles** - 黄色球体
+6. ✅ **Tracked Poles** - 蓝色/绿色球体
+7. ✅ **Pattern Matches** - 杆之间的线条
+8. ✅ **Pipeline Status** - 文本统计信息
+9. ✅ **TF Frames** - 坐标系
+
+##### **步骤 5.2：验证 RViz 固定坐标系**
+```bash
+# 在 RViz 中，检查 "Fixed Frame" 下拉菜单
+# 应设置为：laser_link
+```
+
+##### **步骤 5.3：调整 RViz 视图**
+```bash
+# 在 RViz 中，调整相机以查看杆：
+# 1. 点击 "2D Goal Pose" 工具
+# 2. 在场景中点击以设置视图中心
+# 3. 使用鼠标缩放和平移
+# 4. 查找彩色球体和线条
+```
+
+##### **步骤 5.4：手动 RViz 设置（如需要）**
+如果 RViz 不显示标记：
+
+```bash
+# 1. 手动启动 RViz
+rviz2
+
+# 2. 手动添加显示：
+#    点击 "Add" → "By topic" → "MarkerArray"
+#    选择：/debug/clusters_raw → 启用
+#    选择：/debug/validated_poles → 启用
+#    选择：/debug/rejected_poles → 启用
+#    选择：/debug/tracks → 启用
+#    选择：/debug/pattern_matches → 启用
+#    选择：/debug/pipeline → 启用
+
+# 3. 添加点云：
+#    点击 "Add" → "By topic" → "PointCloud2"
+#    选择：/lslidar_point_cloud → 启用
+
+# 4. 将固定坐标系设置为：laser_link
+```
+
+#### **阶段 6：控制台日志监控**
+
+##### **步骤 6.1：监控系统日志**
+```bash
+# 实时监控检测日志
+ros2 topic echo /rosout --filter "node_name=='pole_detection'"
+```
+
+**关键日志消息：**
+
+```
+✅ 良好指示器：
+"Cluster 3: pts=10, bbox_area=0.0006m², convex_area=0.0005m², width=0.025m"
+"✓ 杆 3 已接受: score=0.85 (ang=25°, pts=10, width=0.025m)"
+"Track 2 已更新: pos=(0.45, 0.12), detections=5"
+"✓ 连续杆 P0-P1: 0.183m (匹配 0.185 ±0.015m)"
+"STRICT COLINEAR 模式: 100.0% (5/5 对匹配)"
+"Jump detected (0.520m) - resetting track 2"
+
+❌ 不良指示器：
+"Cluster 5: 已拒绝 - 仅有2个点（幻觉）"
+"Cluster 7: 已拒绝 - 区域错误 (0.005m², 预期 0.0003-0.0025)"
+"杆不共线 (容差: 0.02m)"
+"✗ 连续杆 P2-P3: 0.210m (预期 0.185 ±0.015m)"
+```
+
+##### **步骤 6.2：启用调试日志**
+```bash
+# 使用调试日志启动以获取详细输出
+ros2 launch pole_detection pole_detection_debug.launch.py \
+  serial_port:=/dev/ttyACM0 \
+  --ros-args --log-level debug
+```
+
+### **9.3 可视化调试（RViz）**
 
 当您使用 [pole_detection_debug.launch.py](file:///home/rc2/FINN/pole/n10p_lidar/src/pole_detection/launch/pole_detection_debug.launch.py) 启动时，RViz会显示：
 
@@ -780,15 +1078,19 @@ ros2 action list
 
 # 查看动作信息
 ros2 action info /track_poles
+```
 
+**使用示例**：
+
+```bash
 # 发送动作目标
-ros2 action send /track_poles pole_detection/action/TrackPoles "{start_tracking: true}"
+ros2 action send_goal /track_poles pole_detection/action/TrackPoles "{start_tracking: true}"
 
 # 监控动作反馈
-ros2 action feedback /track_poles
+ros2 topic echo /track_poles/_action/feedback
 
 # 取消动作
-ros2 action cancel /track_poles
+ros2 action send_goal /track_poles pole_detection/action/TrackPoles "{start_tracking: false}"
 ```
 
 #### **9.2.5 运行时参数调优**
@@ -825,6 +1127,268 @@ ros2 param set /pole_detection max_jump_distance 0.7
 | 跟踪不稳定 | 减少 `association_distance` | `ros2 param set /pole_detection association_distance 0.08` |
 | **跟踪延迟**（NEW） | **增加 `max_jump_distance`** | **`ros2 param set /pole_detection max_jump_distance 0.7`** |
 | **响应太慢**（NEW） | **增加 `ema_alpha`** | **`ros2 param set /pole_detection ema_alpha 0.5`** |
+
+### **9.4 常见问题与解决方案**
+
+#### **问题 1：无杆检测**
+
+**症状**：无绿色球体，无检测到的杆
+
+**诊断步骤**：
+```bash
+# 1. 检查 LiDAR 连接
+ros2 topic hz /lslidar_point_cloud
+# 预期：~10Hz
+
+# 2. 检查节点状态
+ros2 node list | grep pole_detection
+# 预期：/pole_detection
+
+# 3. 检查错误
+ros2 topic echo /rosout --filter "node_name=='pole_detection'"
+
+# 4. 检查调试话题
+ros2 topic list | grep debug
+# 预期：6个调试话题
+```
+
+**解决方案**：
+- 检查 `/dev/ttyACM0` 权限：`sudo chmod 666 /dev/ttyACM0`
+- 验证 LiDAR 已通电
+- 检查范围过滤器：`ros2 param get /pole_detection max_range`
+- 如需要，调整 `max_range` 到 1.0m
+- 重启系统：`Ctrl+C` 并重新启动
+
+#### **问题 2：误报（墙壁被检测为杆）**
+
+**症状**：太多绿色球体，墙壁被检测
+
+**解决方案**：
+```bash
+# 增加最小宽度
+ros2 param set /pole_detection min_radial_width 0.008
+
+# 减小最大宽度
+ros2 param set /pole_detection max_radial_width 0.035
+
+# 启用更严格的角度跨度
+ros2 param set /pole_detection min_angular_span 20.0
+
+# 监控改进
+ros2 topic hz /debug/validated_poles
+```
+
+#### **问题 3：漏检**
+
+**症状**：杆可见但未被检测
+
+**解决方案**：
+```bash
+# 减少每个聚类的最小点数
+ros2 param set /pole_detection cluster_min_size 2
+
+# 增加聚类容差
+ros2 param set /pole_detection cluster_tolerance 0.05
+
+# 放宽验证阈值
+ros2 param set /pole_detection acceptance_threshold 0.50
+
+# 监控改进
+ros2 topic hz /debug/validated_poles
+```
+
+#### **问题 4：目标切换期间跟踪滞后**
+
+**症状**：在杆之间移动时响应缓慢
+
+**解决方案**：
+```bash
+# 增加跳转检测阈值
+ros2 param set /pole_detection max_jump_distance 0.7
+
+# 增加 EMA alpha 以更快响应
+ros2 param set /pole_detection ema_alpha 0.5
+
+# 监控改进
+ros2 topic echo /track_poles/_action/feedback
+```
+
+#### **问题 5：动作服务器无响应**
+
+**症状**：动作目标未被接受，无反馈
+
+**诊断步骤**：
+```bash
+# 1. 检查动作服务器
+ros2 action list
+# 预期：/track_poles
+
+# 2. 查看动作信息
+ros2 action info /track_poles
+
+# 3. 检查节点日志
+ros2 topic echo /rosout --filter "node_name=='pole_detection'"
+```
+
+**解决方案**：
+- 验证动作服务器正在运行：`ros2 action list`
+- 检查动作名称：`/track_poles`
+- 验证动作类型：`pole_detection/action/TrackPoles`（需要完整包路径）
+- 使用正确命令：`ros2 action send_goal /track_poles pole_detection/action/TrackPoles "{start_tracking: true}" --feedback`
+- 如需要，重启节点
+
+#### **问题 6：RViz 不显示标记**
+
+**症状**：RViz 打开但无彩色球体或线条
+
+**诊断步骤**：
+```bash
+# 1. 检查调试话题是否在发布
+ros2 topic list | grep debug
+# 预期：6个调试话题
+
+# 2. 检查话题是否有数据
+ros2 topic hz /debug/clusters_raw
+# 预期：~10Hz
+
+# 3. 查看标记数据
+ros2 topic echo /debug/clusters_raw --once
+# 应看到 MarkerArray 消息
+```
+
+**解决方案**：
+- 验证 RViz 显示已启用（检查复选框）
+- 检查 RViz 固定坐标系设置为 `laser_link`
+- 如需要，手动添加显示（见阶段 5.4）
+- 重启 RViz：关闭并重新打开
+- 检查 RViz 控制台是否有错误
+
+#### **问题 7："The passed action type is invalid" 错误**
+
+**症状**：动作命令因类型错误而失败
+
+**诊断**：
+```bash
+# 检查正确的动作类型
+ros2 interface show pole_detection/action/TrackPoles
+```
+
+**解决方案**：
+- 使用正确的动作类型：`TrackPoles`（不是 `pole_detection/action/TrackPoles`）
+- 正确命令：`ros2 action send_goal /track_poles TrackPoles "{start_tracking: true}" --feedback`
+- 验证动作可用：`ros2 action list`
+
+### **9.5 性能监控**
+
+#### **系统性能**
+
+```bash
+# 监控检测频率
+ros2 topic hz /detected_poles
+# 预期：~10Hz（匹配 LiDAR 速率）
+
+# 监控带宽
+ros2 topic bw /lslidar_point_cloud
+
+# 监控 CPU 使用率
+top | grep pole_detection
+```
+
+#### **动作服务器性能**
+
+```bash
+# 监控动作反馈速率
+ros2 topic echo /track_poles/_action/feedback
+# 预期：10Hz 反馈
+
+# 检查反馈延迟
+# 应 <100ms 从检测到反馈
+```
+
+#### **管道性能**
+
+在 RViz 中观察 `/debug/pipeline` 话题以获取实时指标：
+- 处理速率：10Hz
+- 延迟：每帧 <10ms
+- 动作反馈：10Hz
+
+### **9.6 高级调试**
+
+#### **启用详细日志**
+
+```bash
+# 使用调试日志启动
+ros2 launch pole_detection pole_detection_debug.launch.py \
+  serial_port:=/dev/ttyACM0 \
+  --ros-args --log-level debug
+```
+
+#### **监控单个管道阶段**
+
+```bash
+# 阶段 1：聚类
+ros2 topic echo /debug/clusters_raw --once
+
+# 阶段 2：验证
+ros2 topic echo /debug/validated_poles --once
+
+# 阶段 3：跟踪
+ros2 topic echo /debug/tracks --once
+
+# 阶段 4：模式匹配
+ros2 topic echo /debug/pattern_matches --once
+
+# 阶段 5：管道状态
+ros2 topic echo /debug/pipeline --once
+```
+
+#### **记录和回放**
+
+```bash
+# 记录所有话题以供分析
+ros2 bag record /lslidar_point_cloud /detected_poles /debug/* /track_poles/_action/feedback
+
+# 回放以供调试
+ros2 bag play recorded_bag.bag
+```
+
+#### **参数探索**
+
+```bash
+# 列出所有参数
+ros2 param list | grep pole_detection
+
+# 获取参数值
+ros2 param get /pole_detection cluster_tolerance
+
+# 设置参数值
+ros2 param set /pole_detection cluster_tolerance 0.05
+
+# 重置为默认值
+ros2 param dump /pole_detection > current_params.yaml
+```
+
+### **9.7 维护程序**
+
+#### **每日**
+- 监控检测性能指标
+- 检查动作服务器错误
+- 验证反馈延迟（<100ms）
+- 检查系统日志
+
+#### **每周**
+- 验证 LiDAR 校准和安装
+- 检查软件更新
+- 使用已知杆配置进行测试
+- 审查跟踪稳定性
+- 备份配置文件
+
+#### **每月**
+- 根据环境变化更新参数
+- 备份配置文件
+- 审查和优化性能
+- 测试与行为树的动作服务器集成
+- 审查系统资源使用情况
 
 ---
 
