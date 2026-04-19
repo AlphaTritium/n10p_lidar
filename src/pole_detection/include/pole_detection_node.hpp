@@ -1,11 +1,11 @@
 // ============================================================================
-// POLE DETECTION SYSTEM - MAIN NODE HEADER
+// POLE DETECTION SYSTEM - MAIN NODE HEADER (LASERSCAN VERSION)
 // ============================================================================
 // 
 // This header defines the main pole detection node class that implements:
 // - ROS2 node with action server interface
-// - Point cloud processing pipeline
-// - Multi-object tracking system
+// - LaserScan-based pole detection using nearest neighbor clustering
+// - Multi-object tracking system with EMA smoothing
 // - Debug visualization publishers
 // - Pattern matching capabilities
 //
@@ -17,11 +17,9 @@
 // INCLUDES AND DEPENDENCIES
 // ROS2, sensor messages, visualization, and custom headers
 
-#include "tracker.hpp"
-#include "types.hpp"
 #include <rclcpp/rclcpp.hpp>
-#include <sensor_msgs/msg/point_cloud2.hpp>
-#include <lslidar_msgs/msg/detected_objects.hpp>
+#include <sensor_msgs/msg/laser_scan.hpp>
+#include <pole_detection/msg/detected_objects.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 #include <rclcpp_action/rclcpp_action.hpp>
 #include <thread>
@@ -29,13 +27,44 @@
 #include <atomic>
 #include <vector>
 #include <memory>
+#include <optional>
 #include <pole_detection/action/track_poles.hpp>
 
 namespace pole_detection
 {
 
-// SECTION 2: MAIN POLE DETECTION NODE CLASS DEFINITION
+// ============================================================================
+// SECTION 1: POINT2D STRUCTURE
+// ============================================================================
+// Simple 2D point structure for LaserScan processing
+// ============================================================================
+
+struct Point2D {
+  double x;
+  double y;
+};
+
+// ============================================================================
+// SECTION 2: TRACKED POLE STRUCTURE
+// ============================================================================
+// Structure to maintain tracking state for each detected pole
+// ============================================================================
+
+struct TrackedPole {
+  int track_id;
+  Point2D position;
+  int detection_count;
+  int invisible_count;
+  bool is_visible;
+  bool is_confirmed;
+  builtin_interfaces::msg::Time last_seen;
+};
+
+// ============================================================================
+// SECTION 3: MAIN POLE DETECTION NODE CLASS DEFINITION
+// ============================================================================
 // Core class that orchestrates the complete pole detection pipeline
+// ============================================================================
 
 class PoleDetectionNode : public rclcpp::Node
 {
@@ -67,23 +96,48 @@ private:
   
   // SENSOR INPUT AND DATA PROCESSING
   
-  rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr cloud_sub_;
-  void cloudCallback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr& msg);
+  rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_;
+  void ScanCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg);
   
   // OUTPUT PUBLISHERS FOR DETECTIONS AND VISUALIZATION
   
   // Main detection outputs
-  rclcpp::Publisher<lslidar_msgs::msg::DetectedObjects>::SharedPtr objects_pub_;
-  rclcpp::Publisher<lslidar_msgs::msg::DetectedObjects>::SharedPtr poles_pub_;
+  rclcpp::Publisher<pole_detection::msg::DetectedObjects>::SharedPtr objects_pub_;
+  rclcpp::Publisher<pole_detection::msg::DetectedObjects>::SharedPtr poles_pub_;
   
   // Unified debug visualization (rc2026_head_finder inspired)
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr debug_visuals_pub_;
   
   // TRACKING SYSTEM COMPONENTS
   
-  std::unique_ptr<Tracker> tracker_;
-  std::mutex tracker_mutex_;
-  void ensureTrackerInitialized();
+  std::vector<TrackedPole> tracks_;
+  int next_track_id_;
+  std::mutex data_mutex_;
+  
+  // TRACKING PARAMETERS
+  
+  double max_search_distance_;
+  double cluster_tolerance_;
+  int min_points_per_cluster_;
+  double ema_alpha_;
+  double max_jump_distance_;
+  int max_tracks_;
+  double association_distance_;
+  
+  // PROCESSING METHODS
+  
+  std::vector<Point2D> ExtractClusterCenters(const sensor_msgs::msg::LaserScan::SharedPtr& msg);
+  std::optional<std::pair<Point2D, Point2D>> FitLinePCA(const std::vector<Point2D>& points);
+  void UpdateTracks(const std::vector<Point2D>& detections, const builtin_interfaces::msg::Time& stamp);
+  void MarkAllTracksInvisible();
+  
+  // VISUALIZATION METHODS
+  
+  void PublishVisualizations(const std::vector<Point2D>& centers, 
+                       const std::optional<std::pair<Point2D, Point2D>>& line, 
+                       const std::optional<std::vector<Point2D>>& track_positions,
+                       const std::string& frame_id);
+  void PublishDetectionResults(const std_msgs::msg::Header& header);
 };
 
 }  // namespace pole_detection

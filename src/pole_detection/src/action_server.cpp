@@ -13,7 +13,7 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_action/rclcpp_action.hpp>
-#include <lslidar_msgs/msg/detected_objects.hpp>
+#include <pole_detection/msg/detected_objects.hpp>
 #include <geometry_msgs/msg/point.hpp>
 #include <pole_detection/action/track_poles.hpp>
 #include <memory>
@@ -42,7 +42,7 @@ public:
       should_cancel_(false)
   {
     // Subscribe to detected objects for pole position data
-    objects_sub_ = this->create_subscription<lslidar_msgs::msg::DetectedObjects>(
+    objects_sub_ = this->create_subscription<pole_detection::msg::DetectedObjects>(
       "/detected_objects", 10,
       std::bind(&TrackPolesActionServer::objectsCallback, this, std::placeholders::_1));
     
@@ -67,7 +67,7 @@ private:
   // SECTION 1.2: MEMBER VARIABLES AND COMPONENTS
   // Multi-thread safe variables and ROS2 components
   
-  rclcpp::Subscription<lslidar_msgs::msg::DetectedObjects>::SharedPtr objects_sub_;
+  rclcpp::Subscription<pole_detection::msg::DetectedObjects>::SharedPtr objects_sub_;
   rclcpp_action::Server<TrackPoles>::SharedPtr action_server_;
   
   // Multi-threading safe variables
@@ -76,7 +76,7 @@ private:
   std::shared_ptr<GoalHandleTrackPoles> current_goal_handle_;
   std::mutex goal_mutex_;
   
-  lslidar_msgs::msg::DetectedObjects::SharedPtr latest_detections_;
+  pole_detection::msg::DetectedObjects::SharedPtr latest_detections_;
   std::mutex detection_mutex_;
   
   // ==========================================================================
@@ -84,7 +84,7 @@ private:
   // Processes incoming detection data and maintains latest state
   // ==========================================================================
   
-  void objectsCallback(const lslidar_msgs::msg::DetectedObjects::SharedPtr msg)
+  void objectsCallback(const pole_detection::msg::DetectedObjects::SharedPtr msg)
   {
     std::lock_guard<std::mutex> lock(detection_mutex_);
     latest_detections_ = msg;

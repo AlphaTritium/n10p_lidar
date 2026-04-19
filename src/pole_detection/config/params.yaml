@@ -88,6 +88,6 @@ pole_detection:
     # Set to true for debugging, false for production
     publish_debug_clusters: true
     publish_debug_validation: true
-    publish_debug_tracks: true
+    publish_debug_tracks: false         # DISABLED - using unified visualization
     publish_debug_pattern: true
     publish_pipeline_debug: true     # Comprehensive pipeline visualization

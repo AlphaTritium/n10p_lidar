@@ -64,27 +64,8 @@ Visualization Manager:
       Enabled: true
       Name: Detection Markers
       Namespaces:
-        clusters: true
-        validated: true
-        rejected: true
-      Topic: /debug/markers
-      Unreliable: false
-      Value: true
-    - Class: rviz_default_plugins/MarkerArray
-      Enabled: true
-      Name: Tracked Poles
-      Namespaces:
-        track_ids: true
-        tracks: true
-      Topic: /debug/tracks
-      Unreliable: false
-      Value: true
-    - Class: rviz_default_plugins/MarkerArray
-      Enabled: true
-      Name: Status Display
-      Namespaces:
-        status: true
-      Topic: /debug/status
+        pole_tracking: true
+      Topic: /detected_poles_visuals
       Unreliable: false
       Value: true
     - Class: rviz_default_plugins/TF
