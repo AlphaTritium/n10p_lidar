@@ -5,8 +5,8 @@ bool start_tracking
 bool success
 ---
 # Feedback
-float32 closest_y_offset
-int32 pole_count
-float32 pattern_confidence
-float32 closest_distance
-float32 tracking_confidence
+int32 detected_poles_count  # Number of poles detected (0-4)
+geometry_msgs/Point[] pole_positions  # Array of pole positions relative to LiDAR
+float32[] pole_distances_x  # X distances from LiDAR for each pole
+float32[] pole_distances_y  # Y distances from LiDAR for each pole
+float32[] pole_confidences  # Confidence scores for each pole detection (0.0-1.0)

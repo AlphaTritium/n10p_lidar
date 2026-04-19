@@ -30,7 +30,6 @@ find_package(lslidar_msgs REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common io filters segmentation kdtree search surface)
 find_package(rclcpp_action REQUIRED)
-find_package(rc2026_interfaces REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
 # Include directories
@@ -95,6 +94,9 @@ add_executable(action_server
   src/action_server.cpp
 )
 
+# Add dependency on generated action interface
+add_dependencies(action_server ${PROJECT_NAME}__rosidl_typesupport_cpp)
+
 target_include_directories(action_server PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
@@ -103,10 +105,13 @@ target_include_directories(action_server PUBLIC
 ament_target_dependencies(action_server
   rclcpp
   rclcpp_action
-  rc2026_interfaces
   lslidar_msgs
   geometry_msgs
   std_msgs
+)
+
+target_link_libraries(action_server
+  ${PROJECT_NAME}__rosidl_typesupport_cpp
 )
 
 # ============================================
@@ -157,7 +162,6 @@ ament_export_dependencies(
   lslidar_msgs
   pcl_conversions
   rclcpp_action
-  rc2026_interfaces
 )
 
 ament_package()

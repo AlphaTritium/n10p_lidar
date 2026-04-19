@@ -1,9 +1,0 @@
-# Goal
-float32 final_target_dist
-float32 final_yaw
----
-# Result
-bool success
----
-# Feedback
-int32 task_state
