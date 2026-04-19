@@ -52,11 +52,11 @@ def generate_launch_description():
             ]
         ),
         
-        # Gripper Control Action Server (Behavior Tree Compatible)
+        # TrackPoles Action Server (Behavior Tree Compatible)
         Node(
             package='pole_detection',
             executable='action_server',
-            name='gripper_control_action_server',
+            name='track_poles_action_server',
             output='screen',
             parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
             remappings=[

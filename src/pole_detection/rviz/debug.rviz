@@ -62,29 +62,12 @@ Visualization Manager:
       Value: true
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
-      Name: Raw Clusters
+      Name: Detection Markers
       Namespaces:
-        cluster_labels: true
         clusters: true
-      Topic: /debug/clusters_raw
-      Unreliable: false
-      Value: true
-    - Class: rviz_default_plugins/MarkerArray
-      Enabled: true
-      Name: Validated Poles
-      Namespaces:
-        accepted_labels: true
-        accepted_poles: true
-      Topic: /debug/validated_poles
-      Unreliable: false
-      Value: true
-    - Class: rviz_default_plugins/MarkerArray
-      Enabled: true
-      Name: Rejected Poles
-      Namespaces:
-        rejected_labels: true
-        rejected_poles: true
-      Topic: /debug/rejected_poles
+        validated: true
+        rejected: true
+      Topic: /debug/markers
       Unreliable: false
       Value: true
     - Class: rviz_default_plugins/MarkerArray
@@ -92,30 +75,16 @@ Visualization Manager:
       Name: Tracked Poles
       Namespaces:
         track_ids: true
-        track_paths: true
-        tracked_poles: true
+        tracks: true
       Topic: /debug/tracks
       Unreliable: false
       Value: true
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
-      Name: Pattern Matches
+      Name: Status Display
       Namespaces:
-        distance_labels: true
-        distance_lines: true
-      Topic: /debug/pattern_matches
-      Unreliable: false
-      Value: true
-    - Class: rviz_default_plugins/MarkerArray
-      Enabled: true
-      Name: Pipeline Status
-      Namespaces:
-        pipeline_connections: true
-        pipeline_flow: true
-        pipeline_performance: true
-        pipeline_stages: true
-        pipeline_stats: true
-      Topic: /debug/pipeline
+        status: true
+      Topic: /debug/status
       Unreliable: false
       Value: true
     - Class: rviz_default_plugins/TF

@@ -76,13 +76,8 @@ private:
   rclcpp::Publisher<lslidar_msgs::msg::DetectedObjects>::SharedPtr objects_pub_;
   rclcpp::Publisher<lslidar_msgs::msg::DetectedObjects>::SharedPtr poles_pub_;
   
-  // Debug visualization publishers
-  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr clusters_debug_pub_;
-  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr validated_debug_pub_;
-  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr rejected_debug_pub_;
-  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr tracks_debug_pub_;
-  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pattern_debug_pub_;
-  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pipeline_debug_pub_;
+  // Unified debug visualization (rc2026_head_finder inspired)
+  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr debug_visuals_pub_;
   
   // TRACKING SYSTEM COMPONENTS
   

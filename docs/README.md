@@ -256,11 +256,11 @@ goal TrackPoles {
 **Feedback**:
 ```idl
 feedback TrackPoles {
-  float32 closest_y_offset      // Lateral offset of closest pole
-  int32 pole_count             // Number of detected poles
-  float32 pattern_confidence   // Pattern matching confidence
-  float32 closest_distance     // Distance to closest pole
-  float32 tracking_confidence  // Tracking confidence
+  int32 detected_poles_count       // Number of poles detected (0-4)
+  geometry_msgs/Point[] pole_positions  // Array of pole positions relative to LiDAR
+  float32[] pole_distances_x       // X distances from LiDAR for each pole
+  float32[] pole_distances_y       // Y distances from LiDAR for each pole
+  float32[] pole_confidences       // Confidence scores for each pole detection (0.0-1.0)
 }
 ```
 

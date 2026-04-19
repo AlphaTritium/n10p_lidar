@@ -12,7 +12,7 @@ colcon build --packages-select pole_detection lslidar_driver
 source install/setup.bash
 
 # Launch in debug mode (recommended for hands-on)
-ros2 launch pole_detection pole_detection_debug.launch.py serial_port:=/dev/ttyACM0
+ros2 launch pole_detection pole_detection.launch.py start_rviz:=true
 ```
 
 ### Using Action Server - CORRECTED COMMANDS
@@ -52,16 +52,6 @@ ros2 topic echo /track_poles/_action/feedback
 
 ### Real-Time Parameter Tuning
 
-**Quick Parameter Tuning (Recommended for Vibration Fix):**
-
-```bash
-# Apply optimized parameters to fix vibration
-./scripts/tune_parameters.sh
-
-# Compare current vs recommended parameters
-./scripts/compare_parameters.sh
-```
-
 **Manual Parameter Tuning:**
 
 ```bash
@@ -100,12 +90,9 @@ ros2 param set /pole_detection max_jump_distance 0.5
 
 ```bash
 # 1. Launch system
-ros2 launch pole_detection pole_detection_debug.launch.py serial_port:=/dev/ttyACM0
+ros2 launch pole_detection pole_detection.launch.py start_rviz:=true
 
-# 2. Apply optimized parameters
-./scripts/tune_parameters.sh
-
-# 3. Monitor improvement
+# 2. Monitor improvement
 ros2 topic echo /debug/tracks
 ```
 
@@ -151,7 +138,7 @@ source install/setup.bash
 
 ```bash
 # Launch in debug mode with RViz
-ros2 launch pole_detection pole_detection_debug.launch.py serial_port:=/dev/ttyACM0
+ros2 launch pole_detection pole_detection.launch.py start_rviz:=true
 ```
 
 **Expected Output:**
@@ -264,7 +251,6 @@ ros2 action list
 
 **Expected Output:**
 ```
-/task/gripper_control
 /track_poles
 ```
 
@@ -285,11 +271,11 @@ Action Definition:
   Result:
     bool success
   Feedback:
-    float32 closest_y_offset
-    int32 pole_count
-    float32 pattern_confidence
-    float32 closest_distance
-    float32 tracking_confidence
+    int32 detected_poles_count
+    geometry_msgs/Point[] pole_positions
+    float32[] pole_distances_x
+    float32[] pole_distances_y
+    float32[] pole_confidences
 ```
 
 #### Step 4.3: Test Action Server
@@ -305,11 +291,14 @@ Waiting for an action server to become available...
 Sending goal...
 Goal accepted with ID: 1
 Feedback:
-  closest_y_offset: 0.123
-  pole_count: 6
-  pattern_confidence: 1.0
-  closest_distance: 0.456
-  tracking_confidence: 0.95
+  detected_poles_count: 6
+  pole_positions:
+    - {x: 0.45, y: 0.12, z: 0.0}
+    - {x: 0.63, y: 0.12, z: 0.0}
+    - {x: 0.81, y: 0.12, z: 0.0}
+  pole_distances_x: [0.45, 0.63, 0.81]
+  pole_distances_y: [0.12, 0.12, 0.12]
+  pole_confidences: [0.95, 0.96, 0.97]
 ...
 Goal finished with status: SUCCEEDED
 ```
@@ -325,18 +314,24 @@ ros2 topic echo /track_poles/_action/feedback
 ```
 ---
 feedback:
-  closest_y_offset: 0.123
-  pole_count: 6
-  pattern_confidence: 1.0
-  closest_distance: 0.456
-  tracking_confidence: 0.95
+  detected_poles_count: 6
+  pole_positions:
+    - {x: 0.45, y: 0.12, z: 0.0}
+    - {x: 0.63, y: 0.12, z: 0.0}
+    - {x: 0.81, y: 0.12, z: 0.0}
+  pole_distances_x: [0.45, 0.63, 0.81]
+  pole_distances_y: [0.12, 0.12, 0.12]
+  pole_confidences: [0.95, 0.96, 0.97]
 ---
 feedback:
-  closest_y_offset: 0.124
-  pole_count: 6
-  pattern_confidence: 1.0
-  closest_distance: 0.457
-  tracking_confidence: 0.96
+  detected_poles_count: 6
+  pole_positions:
+    - {x: 0.45, y: 0.12, z: 0.0}
+    - {x: 0.63, y: 0.12, z: 0.0}
+    - {x: 0.81, y: 0.12, z: 0.0}
+  pole_distances_x: [0.45, 0.63, 0.81]
+  pole_distances_y: [0.12, 0.12, 0.12]
+  pole_confidences: [0.95, 0.96, 0.97]
 ---
 ```
 
@@ -428,8 +423,7 @@ ros2 topic echo /rosout --filter "node_name=='pole_detection'"
 
 ```bash
 # Launch with debug logging for detailed output
-ros2 launch pole_detection pole_detection_debug.launch.py \
-  serial_port:=/dev/ttyACM0 \
+ros2 launch pole_detection pole_detection.launch.py start_rviz:=true \
   --ros-args --log-level debug
 ```
 

@@ -683,11 +683,11 @@ bool start_tracking
 bool success
 ---
 # Feedback
-float32 closest_y_offset
-int32 pole_count
-float32 pattern_confidence
-float32 closest_distance
-float32 tracking_confidence
+int32 detected_poles_count
+geometry_msgs/Point[] pole_positions
+float32[] pole_distances_x
+float32[] pole_distances_y
+float32[] pole_confidences
 ```
 
 **Action Server Code**:
@@ -725,11 +725,23 @@ void PoleDetectionNode::executeGoal(
         std::lock_guard<std::mutex> lock(data_mutex_);
         
         // Generate feedback from current state
-        feedback->closest_y_offset = calculateClosestYOffset();
-        feedback->pole_count = static_cast<int>(tracks_.size());
-        feedback->pattern_confidence = pattern_confidence_;
-        feedback->closest_distance = calculateClosestDistance();
-        feedback->tracking_confidence = calculateTrackingConfidence();
+        feedback->detected_poles_count = static_cast<int>(tracks_.size());
+        feedback->pole_positions.clear();
+        feedback->pole_distances_x.clear();
+        feedback->pole_distances_y.clear();
+        feedback->pole_confidences.clear();
+        
+        for (const auto& track : tracks_) {
+            geometry_msgs::msg::Point point;
+            point.x = track.position.x;
+            point.y = track.position.y;
+            point.z = 0.0;
+            
+            feedback->pole_positions.push_back(point);
+            feedback->pole_distances_x.push_back(static_cast<float>(track.position.x));
+            feedback->pole_distances_y.push_back(static_cast<float>(track.position.y));
+            feedback->pole_confidences.push_back(static_cast<float>(track.confidence));
+        }
         
         goal_handle->publish_feedback(feedback);
         

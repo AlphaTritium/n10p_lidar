@@ -672,11 +672,11 @@ bool start_tracking
 bool success
 ---
 # Feedback
-float32 closest_y_offset
-int32 pole_count
-float32 pattern_confidence
-float32 closest_distance
-float32 tracking_confidence
+int32 detected_poles_count
+geometry_msgs/Point[] pole_positions
+float32[] pole_distances_x
+float32[] pole_distances_y
+float32[] pole_confidences
 ```
 
 **Multi-Threading**:
@@ -699,27 +699,22 @@ void PoleDetectionNode::feedbackLoop(
             std::lock_guard<std::mutex> lock(data_mutex_);
             auto tracks = tracker_->getTracks();
             
-            if (!tracks.empty()) {
-                // Find closest track
-                auto closest = *std::min_element(tracks.begin(), tracks.end(),
-                    [](const TrackedPole& a, const TrackedPole& b) {
-                        double dist_a = std::hypot(a.position.x, a.position.y);
-                        double dist_b = std::hypot(b.position.x, b.position.y);
-                        return dist_a < dist_b;
-                    });
+            feedback->detected_poles_count = tracks.size();
+            feedback->pole_positions.clear();
+            feedback->pole_distances_x.clear();
+            feedback->pole_distances_y.clear();
+            feedback->pole_confidences.clear();
+            
+            for (const auto& track : tracks) {
+                geometry_msgs::msg::Point point;
+                point.x = track.position.x;
+                point.y = track.position.y;
+                point.z = 0.0;
                 
-                feedback->closest_y_offset = closest.position.y;
-                feedback->pole_count = tracks.size();
-                feedback->closest_distance = std::hypot(closest.position.x, closest.position.y);
-                feedback->tracking_confidence = closest.avg_features_confidence;
-                
-                // Pattern matching confidence
-                if (tracks.size() >= 2) {
-                    auto match_result = pattern_matcher_->match(tracks);
-                    feedback->pattern_confidence = match_result.match_ratio;
-                } else {
-                    feedback->pattern_confidence = 0.0f;
-                }
+                feedback->pole_positions.push_back(point);
+                feedback->pole_distances_x.push_back(static_cast<float>(track.position.x));
+                feedback->pole_distances_y.push_back(static_cast<float>(track.position.y));
+                feedback->pole_confidences.push_back(static_cast<float>(track.avg_features_confidence));
             }
         }
         
