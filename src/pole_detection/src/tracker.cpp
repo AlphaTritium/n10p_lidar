@@ -58,7 +58,6 @@ std::vector<TrackedPole> Tracker::update(
   
   // ==========================================================================
   // STEP 2.2: ASSOCIATE DETECTIONS WITH EXISTING TRACKS
-  // ==========================================================================
   // Data association using nearest neighbor within association distance
   // ==========================================================================
   
@@ -86,7 +85,6 @@ std::vector<TrackedPole> Tracker::update(
     
     // ========================================================================
     // STEP 2.3: UPDATE EXISTING TRACK OR CREATE NEW TRACK
-    // ========================================================================
     // Update matched tracks or create new tracks within maximum limits
     // ========================================================================
     
@@ -129,7 +127,6 @@ std::vector<TrackedPole> Tracker::update(
   
   // ==========================================================================
   // STEP 2.4: REMOVE STALE TRACKS
-  // ==========================================================================
   // Clean up tracks that have been invisible for too many frames
   // ==========================================================================
   
@@ -148,7 +145,6 @@ std::vector<TrackedPole> Tracker::update(
   
   // ==========================================================================
   // STEP 2.5: PUBLISH DEBUG VISUALIZATION
-  // ==========================================================================
   // Generate debug markers for visualization if enabled
   // ==========================================================================
   
@@ -161,7 +157,6 @@ std::vector<TrackedPole> Tracker::update(
 
 // ============================================================================
 // SECTION 3: DEBUG VISUALIZATION MARKER GENERATION
-// ============================================================================
 // Creates visualization markers for track visualization in RViz
 // ============================================================================
 
