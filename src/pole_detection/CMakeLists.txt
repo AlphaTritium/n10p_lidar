@@ -28,6 +28,8 @@ find_package(geometry_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
+find_package(PCL REQUIRED COMPONENTS common io segmentation filters features kdtree)
+find_package(pcl_conversions REQUIRED)
 
 # Include directories
 include_directories(
@@ -44,10 +46,10 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 )
 
 # ============================================
-# Executable: pole_detection_node (LaserScan version - like rc2026_head_finder)
+# Executable: pole_detection_node (Unified implementation)
 # ============================================
 add_executable(pole_detection_node
-  src/pole_detection_node.cpp
+  src/pole_detection_unified.cpp
 )
 
 # Add dependency on generated action interface
@@ -65,10 +67,13 @@ ament_target_dependencies(pole_detection_node
   geometry_msgs
   visualization_msgs
   rclcpp_action
+  pcl_conversions
+  PCL
 )
 
 target_link_libraries(pole_detection_node
   ${PROJECT_NAME}__rosidl_typesupport_cpp
+  ${PCL_LIBRARIES}
 )
 
 # ============================================
