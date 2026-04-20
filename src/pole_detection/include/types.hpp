@@ -5,12 +5,8 @@
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/point.hpp>
 #include <vector>
-<<<<<<< HEAD
-#include <string><Eigen/Dense>
-=======
 #include <string>
 #include <utility>
->>>>>>> e31d5b70a2cd5a678180cf747000e32892b1050c
 
 namespace pole_detection
 {
@@ -155,23 +151,6 @@ struct TrackedPole
       invisible_count(0), first_seen(stamp), last_seen(stamp),
       is_confirmed(false), is_active(true) {}
   
-<<<<<<< HEAD
-  void update(const geometry_msgs::msg::Point& pos, double confidence, rclcpp::Time stamp, int confirmation_threshold = 5) {
-    // Calculate time delta for prediction
-    double dt = (stamp - last_seen).seconds();
-    if (dt > 0.5) dt = 0.1;  // Limit for large gaps
-    
-    // Predict state forward
-    filter.predict(dt);
-    
-    // Update with new measurement
-    filter.update(pos.x, pos.y, confidence);
-    
-    // Update position from Kalman filter
-    position = filter.getPosition();
-    
-    // Update tracking statistics
-=======
   void update(const geometry_msgs::msg::Point& pos, double confidence, rclcpp::Time stamp, 
              int confirmation_threshold = 5, double ema_alpha = 0.3, double max_jump_distance = 0.5) {
     // Smart EMA with jump detection from rc2026_head_finder
@@ -190,7 +169,6 @@ struct TrackedPole
     }
     
     position.z = 0.05;
->>>>>>> e31d5b70a2cd5a678180cf747000e32892b1050c
     avg_features_confidence = 0.9 * avg_features_confidence + 0.1 * confidence;
     last_seen = stamp;
     detection_count++;
