@@ -24,8 +24,10 @@
 #include <mutex>
 #include <cmath>
 
+// ========================================================
 // ACTION SERVER CLASS DEFINITION
 // Main class implementing the pole tracking action server
+// ========================================================
 
 class TrackPolesActionServer : public rclcpp::Node
 {
@@ -33,7 +35,7 @@ public:
   using TrackPoles = pole_detection::action::TrackPoles;
   using GoalHandleTrackPoles = rclcpp_action::ServerGoalHandle<TrackPoles>;
   
-  // SECTION 1.1: CONSTRUCTOR AND INITIALIZATION
+  // CONSTRUCTOR AND INITIALIZATION
   // Sets up subscriptions, action server, and multi-threading components
   
   explicit TrackPolesActionServer(const rclcpp::NodeOptions& options = rclcpp::NodeOptions())
@@ -64,7 +66,7 @@ public:
   }
 
 private:
-  // SECTION 1.2: MEMBER VARIABLES AND COMPONENTS
+  // MEMBER VARIABLES AND COMPONENTS
   // Multi-thread safe variables and ROS2 components
   
   rclcpp::Subscription<pole_detection::msg::DetectedObjects>::SharedPtr objects_sub_;
@@ -92,11 +94,10 @@ private:
   
   // ==========================================================================
   // SECTION 3: ACTION SERVER CALLBACK HANDLERS
-  // ==========================================================================
   // Handles goal requests, cancellations, and task acceptance
   // ==========================================================================
   
-  // 3.1: Cancel request handler (preemptability)
+  // Cancel request handler (preemptability)
   rclcpp_action::CancelResponse handleCancel(
     const std::shared_ptr<GoalHandleTrackPoles> goal_handle)
   {
@@ -109,7 +110,7 @@ private:
     return rclcpp_action::CancelResponse::ACCEPT;
   }
   
-  // 3.2: Goal request handler
+  // Goal request handler
   rclcpp_action::GoalResponse handleGoal(
     const rclcpp_action::GoalUUID& uuid,
     std::shared_ptr<const TrackPoles::Goal> goal)
@@ -129,7 +130,7 @@ private:
     return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
   }
   
-  // 3.3: Goal acceptance handler
+  // Goal acceptance handler
   void handleAccepted(const std::shared_ptr<GoalHandleTrackPoles> goal_handle)
   {
     // Reset state for new task execution
@@ -149,7 +150,6 @@ private:
   
   // ==========================================================================
   // SECTION 4: MAIN TASK EXECUTION LOOP
-  // ==========================================================================
   // Core task execution with cancellation, timeout, and feedback handling
   // ==========================================================================
   
@@ -170,8 +170,7 @@ private:
     
     while (rclcpp::ok() && is_running_.load()) {
       // ======================================================================
-      // STEP 4.1: CHECK FOR CANCELLATION REQUEST (PREEMPTABILITY)
-      // ======================================================================
+      // CHECK FOR CANCELLATION REQUEST (PREEMPTABILITY)
       // Gracefully handle task cancellation requests
       // ======================================================================
       
@@ -189,8 +188,7 @@ private:
       }
       
       // ======================================================================
-      // STEP 4.2: PUBLISH STATUS FEEDBACK (REGULAR INTERVALS)
-      // ======================================================================
+      // PUBLISH STATUS FEEDBACK (REGULAR INTERVALS)  
       // Provide regular feedback for task monitoring
       // ======================================================================
       
@@ -201,8 +199,7 @@ private:
       }
       
       // ======================================================================
-      // STEP 4.3: CHECK FOR TIMEOUT CONDITIONS
-      // ======================================================================
+      // CHECK FOR TIMEOUT CONDITIONS
       // Prevent infinite execution with timeout protection
       // ======================================================================
       
@@ -220,8 +217,7 @@ private:
       }
       
       // ======================================================================
-      // STEP 4.4: PROCESS DETECTION DATA FOR POLE TRACKING
-      // ======================================================================
+      // PROCESS DETECTION DATA FOR POLE TRACKING
       // Core detection processing logic
       // ======================================================================
       
@@ -247,7 +243,6 @@ private:
   
   // ==========================================================================
   // SECTION 5: DETECTION PROCESSING LOGIC
-  // ==========================================================================
   // Core algorithm for pole detection and tracking
   // ==========================================================================
   
@@ -274,7 +269,6 @@ private:
   
   // ==========================================================================
   // SECTION 6: FEEDBACK PUBLISHING AND STATE MANAGEMENT
-  // ==========================================================================
   // Feedback generation and system cleanup functions
   // ==========================================================================
   
@@ -332,7 +326,6 @@ private:
 
 // ============================================================================
 // SECTION 7: MAIN APPLICATION ENTRY POINT
-// ============================================================================
 // ROS2 node initialization and multi-threaded executor setup
 // ============================================================================
 
