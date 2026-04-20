@@ -1,9 +1,0 @@
-# Goal(TX 0x03)
-float32 final_target_dist # 相对目标的距离
-float32 final_yaw         # 相对于台阶中轴线的偏航角, 左正右负
----
-# Result
-bool success
----
-#  FeedBack(RX)
-int32 task_state #(1. 开始 , 0.结束)

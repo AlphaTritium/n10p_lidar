@@ -1,52 +1,39 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, LogInfo
+from launch.actions import DeclareLaunchArgument, LogInfo, IncludeLaunchDescription
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.conditions import IfCondition
 from launch_ros.substitutions import FindPackageShare
 from launch_ros.actions import Node
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+import os
 
 def generate_launch_description():
     return LaunchDescription([
         # Arguments
-        DeclareLaunchArgument(
-            'serial_port',
-            default_value='/dev/ttyACM0',
-            description='LiDAR serial port device'
-        ),
-        
         DeclareLaunchArgument(
             'use_sim_time',
             default_value='false',
             description='Use simulation time'
         ),
         
-        # LiDAR Driver
-        Node(
-            package='lslidar_driver',
-            executable='lslidar_driver_node',
-            name='lslidar_driver_node',
-            output='screen',
-            parameters=[{
-                'interface_selection': 'serial',
-                'serial_port_': LaunchConfiguration('serial_port'),
-                'lidar_name': 'N10_P',
-                'baud_rate_': 460800,
-                'frame_id': 'laser_link',
-                'scan_topic': '/scan',
-                'pointcloud_topic': '/lslidar_point_cloud',
-                'min_range': 0.0,
-                'max_range': 0.8,
-                'pubScan': True,
-                'pubPointCloud2': True,
-                'use_gps_ts': False,
-                'compensation': False,
-                'use_sim_time': LaunchConfiguration('use_sim_time'),
-            }],
-            remappings=[
-                ('/lslidar_point_cloud', '/lslidar_point_cloud'),
-            ]
+        DeclareLaunchArgument(
+            'start_rviz',
+            default_value='true',
+            description='Start RViz with debug visualization'
         ),
         
-        # Pole Detection Node (Production Mode - Debug OFF)
+        # LiDAR Driver - using n10p_driver approach with YAML configuration
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([
+                PathJoinSubstitution([
+                    FindPackageShare('lslidar_driver'),
+                    'launch',
+                    'lsn10p_launch.py'
+                ])
+            ])
+        ),
+        
+        # Pole Detection Node (UNIFIED Configuration)
         Node(
             package='pole_detection',
             executable='pole_detection_node',
@@ -56,31 +43,28 @@ def generate_launch_description():
                 PathJoinSubstitution([
                     FindPackageShare('pole_detection'),
                     'config',
-                    'production_params.yaml'
+                    'params.yaml'
                 ]),
                 {'use_sim_time': LaunchConfiguration('use_sim_time')}
             ],
             remappings=[
                 ('/lslidar_point_cloud', '/lslidar_point_cloud'),
-                ('/detected_objects', '/detected_objects'),
-                ('/detected_poles', '/detected_poles'),
             ]
         ),
         
-        # Gripper Control Action Server
+        # TrackPoles Action Server (Behavior Tree Compatible)
         Node(
             package='pole_detection',
             executable='action_server',
-            name='gripper_control_action_server',
+            name='track_poles_action_server',
             output='screen',
             parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
             remappings=[
                 ('/detected_objects', '/detected_objects'),
-                ('/task/gripper_control', '/task/gripper_control'),
             ]
         ),
         
-        # Static Transform Publisher: base_link -> laser_link
+        # Static Transform Publisher
         Node(
             package='tf2_ros',
             executable='static_transform_publisher',
@@ -89,8 +73,22 @@ def generate_launch_description():
             output='screen'
         ),
         
+        # RViz with Pre-configured Debug Displays
+        Node(
+            package='rviz2',
+            executable='rviz2',
+            name='rviz2',
+            arguments=['-d', PathJoinSubstitution([
+                FindPackageShare('pole_detection'),
+                'rviz',
+                'debug.rviz'
+            ])],
+            condition=IfCondition(LaunchConfiguration('start_rviz')),
+            output='screen'
+        ),
+        
         LogInfo(msg=[
-            '🚀 Pole Detection System launched in PRODUCTION mode ',
-            '(debug publishing disabled)'
+            '🔍 Pole Detection System launched with UNIFIED configuration ',
+            '(Combines production stability with debug visibility)'
         ]),
     ])

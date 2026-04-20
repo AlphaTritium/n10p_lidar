@@ -19,52 +19,39 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# Find dependencies - ORDER MATTERS!
-find_package(Boost REQUIRED thread)
-find_package(diagnostic_updater REQUIRED)
+# Find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
-find_package(lslidar_msgs REQUIRED)
-find_package(pcl_conversions REQUIRED)
-find_package(PCL REQUIRED COMPONENTS common io filters segmentation kdtree search surface)
-find_package(pcl_conversions REQUIRED)
 find_package(rclcpp_action REQUIRED)
-find_package(rc2026_interfaces REQUIRED)
-find_package(tf2_ros REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
 
 # Include directories
 include_directories(
-  include
-  ${PCL_INCLUDE_DIRS}
-  ${PCL_COMMON_INCLUDE_DIRS}
-  ${Boost_INCLUDE_DIRS}
-  ${pcl_conversions_INCLUDE_DIRS}
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  ${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp
 )
 
-# Link directories
-link_directories(
-  ${PCL_LIBRARY_DIRS}
+# Generate action interfaces FIRST (before executables)
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "action/TrackPoles.action"
+  "msg/DetectedObject.msg"
+  "msg/DetectedObjects.msg"
+  DEPENDENCIES std_msgs geometry_msgs
 )
-
-# Add definitions for PCL
-add_definitions(${PCL_DEFINITIONS})
 
 # ============================================
-# Executable: pole_detection_node (Main orchestrator)
+# Executable: pole_detection_node (LaserScan version - like rc2026_head_finder)
 # ============================================
 add_executable(pole_detection_node
   src/pole_detection_node.cpp
-  # src/preprocessor.cpp
-  src/geometric_pattern_matcher.cpp
-  src/clusterer.cpp
-  src/validator.cpp
-  src/tracker.cpp
-  src/pattern_matcher.cpp
 )
+
+# Add dependency on generated action interface
+add_dependencies(pole_detection_node ${PROJECT_NAME}__rosidl_typesupport_cpp)
 
 target_include_directories(pole_detection_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -77,12 +64,11 @@ ament_target_dependencies(pole_detection_node
   sensor_msgs
   geometry_msgs
   visualization_msgs
-  lslidar_msgs
-  pcl_conversions
+  rclcpp_action
 )
 
 target_link_libraries(pole_detection_node
-  ${PCL_LIBRARIES}
+  ${PROJECT_NAME}__rosidl_typesupport_cpp
 )
 
 # ============================================
@@ -92,6 +78,9 @@ add_executable(action_server
   src/action_server.cpp
 )
 
+# Add dependency on generated action interface
+add_dependencies(action_server ${PROJECT_NAME}__rosidl_typesupport_cpp)
+
 target_include_directories(action_server PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
@@ -100,10 +89,12 @@ target_include_directories(action_server PUBLIC
 ament_target_dependencies(action_server
   rclcpp
   rclcpp_action
-  rc2026_interfaces
-  lslidar_msgs
   geometry_msgs
   std_msgs
+)
+
+target_link_libraries(action_server
+  ${PROJECT_NAME}__rosidl_typesupport_cpp
 )
 
 # ============================================
@@ -154,7 +145,6 @@ ament_export_dependencies(
   lslidar_msgs
   pcl_conversions
   rclcpp_action
-  rc2026_interfaces
 )
 
 ament_package()

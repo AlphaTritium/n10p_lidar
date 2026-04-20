@@ -5,7 +5,12 @@
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/point.hpp>
 #include <vector>
+<<<<<<< HEAD
 #include <string><Eigen/Dense>
+=======
+#include <string>
+#include <utility>
+>>>>>>> e31d5b70a2cd5a678180cf747000e32892b1050c
 
 namespace pole_detection
 {
@@ -150,6 +155,7 @@ struct TrackedPole
       invisible_count(0), first_seen(stamp), last_seen(stamp),
       is_confirmed(false), is_active(true) {}
   
+<<<<<<< HEAD
   void update(const geometry_msgs::msg::Point& pos, double confidence, rclcpp::Time stamp, int confirmation_threshold = 5) {
     // Calculate time delta for prediction
     double dt = (stamp - last_seen).seconds();
@@ -165,6 +171,26 @@ struct TrackedPole
     position = filter.getPosition();
     
     // Update tracking statistics
+=======
+  void update(const geometry_msgs::msg::Point& pos, double confidence, rclcpp::Time stamp, 
+             int confirmation_threshold = 5, double ema_alpha = 0.3, double max_jump_distance = 0.5) {
+    // Smart EMA with jump detection from rc2026_head_finder
+    double jump_dist = std::hypot(pos.x - position.x, pos.y - position.y);
+    
+    if (jump_dist > max_jump_distance) {
+      // Immediate reset on large jumps (target switch detection)
+      position.x = pos.x;
+      position.y = pos.y;
+      RCLCPP_INFO(rclcpp::get_logger("pole_detection"), 
+          "Jump detected (%.3fm) - resetting track %d", jump_dist, track_id);
+    } else {
+      // Normal EMA smoothing with configurable alpha
+      position.x = ema_alpha * pos.x + (1.0 - ema_alpha) * position.x;
+      position.y = ema_alpha * pos.y + (1.0 - ema_alpha) * position.y;
+    }
+    
+    position.z = 0.05;
+>>>>>>> e31d5b70a2cd5a678180cf747000e32892b1050c
     avg_features_confidence = 0.9 * avg_features_confidence + 0.1 * confidence;
     last_seen = stamp;
     detection_count++;
@@ -192,6 +218,20 @@ struct ClusterDebugInfo
   geometry_msgs::msg::Point centroid;
   bool was_accepted;
   std::string reason;
+};
+
+struct PatternMatchResult
+{
+  int matches;
+  int total_pairs;
+  double match_ratio;
+  std::vector<std::pair<int, int>> matched_pairs;
+  
+  PatternMatchResult()
+    : matches(0)
+    , total_pairs(0)
+    , match_ratio(0.0)
+  {}
 };
 
 }  // namespace pole_detection
