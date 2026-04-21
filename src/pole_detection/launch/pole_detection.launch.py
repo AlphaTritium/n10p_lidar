@@ -70,16 +70,18 @@ def generate_launch_description():
         ),
         
         # TrackPoles Action Server (Behavior Tree Compatible)
-        Node(
-            package='pole_detection',
-            executable='action_server',
-            name='track_poles_action_server',
-            output='screen',
-            parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
-            remappings=[
-                ('/detected_objects', '/detected_objects'),
-            ]
-        ),
+        # NOTE: Action server is now integrated into pole_detection_node
+        # Remove this duplicate to avoid conflicts
+        # Node(
+        #     package='pole_detection',
+        #     executable='action_server',
+        #     name='track_poles_action_server',
+        #     output='screen',
+        #     parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
+        #     remappings=[
+        #         ('/detected_objects', '/detected_objects'),
+        #     ]
+        # ),
         
         # Static Transform Publisher - Use laser_link to match LiDAR driver
         Node(
