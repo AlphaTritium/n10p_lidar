@@ -121,10 +121,15 @@ private:
     
     (void)uuid;
     
-    // Check if another task is already running
+    // Preempt existing goal if running (cancel old goal automatically)
     if (is_running_.load()) {
-      RCLCPP_WARN(this->get_logger(), "已有任务正在运行，拒绝新目标");
-      return rclcpp_action::GoalResponse::REJECT;
+      RCLCPP_WARN(this->get_logger(), "已有任务正在运行，取消旧目标并接受新目标");
+      
+      // Signal cancellation of current goal
+      should_cancel_.store(true);
+      
+      // Wait briefly for cleanup
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
     
     return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;

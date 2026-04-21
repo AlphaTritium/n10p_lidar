@@ -19,6 +19,10 @@ ros2 launch pole_detection pole_detection.launch.py start_rviz:=true
 
 ### LiDAR Driver Configuration
 
+For detailed LiDAR driver setup, troubleshooting, and advanced configuration, see:
+
+- **[LIDAR_DRIVER_GUIDE.md](LIDAR_DRIVER_GUIDE.md)** - Complete driver operations guide
+
 **Quick Configuration Options**:
 
 ```bash
@@ -32,6 +36,37 @@ ros2 launch pole_detection pole_detection.launch.py lidar_model:=m10   # For M10
 
 # Production mode (no RViz)
 ros2 launch pole_detection pole_detection.launch.py start_rviz:=false
+```
+
+**Note**: The LiDAR driver now starts automatically without manual lifecycle management. If you encounter "Node not found" errors, ensure you've rebuilt after recent changes:
+```bash
+colcon build --packages-select lslidar_driver
+source install/setup.bash
+```
+
+### RViz Visualization
+
+**Launch with RViz** (recommended - handles X11/Wayland issues automatically):
+```bash
+ros2 launch pole_detection pole_detection.launch.py start_rviz:=true
+```
+
+**Manual RViz Launch** (if launching separately):
+```bash
+# Fix for Wayland/Snap conflicts
+export QT_QPA_PLATFORM=xcb
+rviz2 -d src/pole_detection/rviz/debug.rviz
+```
+
+**If RViz crashes with symbol lookup error**:
+```bash
+# This is a Snap package issue. Solutions:
+# 1. Use the launch file method above (has fix built-in)
+# 2. Or set environment variable before running rviz2:
+export QT_QPA_PLATFORM=xcb
+
+# 3. Or install non-snap version:
+sudo apt install ros-humble-rviz2
 ```
 
 ### Using Action Server - CORRECTED COMMANDS
@@ -87,6 +122,7 @@ ros2 param set /pole_detection max_jump_distance 0.5
 ```
 
 **For detailed parameter tuning guide, see:**
+
 - [PARAMETER_TUNING_GUIDE.md](file:///home/rc3/Desktop/n10p_lidar/docs/PARAMETER_TUNING_GUIDE.md) - Complete vibration fix guide
 
 ---
@@ -96,11 +132,13 @@ ros2 param set /pole_detection max_jump_distance 0.5
 ### Problem: Excessive Dot Vibration
 
 **Symptoms:**
+
 - Tracking dots vibrate excessively even when stationary
 - Jittery movement in RViz
 - Unstable tracking
 
 **Root Cause:**
+
 - **NOT** algorithm choice (both EMA and Kalman work well)
 - **Parameter mismatch** between clustering and tracking stages
 - Tight clustering + loose association = unstable tracking
@@ -116,12 +154,14 @@ ros2 topic echo /debug/tracks
 ```
 
 **Expected Results:**
+
 - ✅ Stable tracking dots (minimal vibration)
 - ✅ Smooth position updates
 - ✅ No jumping between poles
 - ✅ High tracking confidence
 
 **For detailed troubleshooting, see:**
+
 - [PARAMETER_TUNING_GUIDE.md](file:///home/rc3/Desktop/n10p_lidar/docs/PARAMETER_TUNING_GUIDE.md)
 
 ---
@@ -161,6 +201,7 @@ ros2 launch pole_detection pole_detection.launch.py start_rviz:=true
 ```
 
 **Expected Output:**
+
 ```
 [INFO] [lslidar_driver_node]: LiDAR driver initialized
 [INFO] [pole_detection]: Pole Detection Node initialized
@@ -203,6 +244,7 @@ ros2 topic echo /lslidar_point_cloud --once
 ```
 
 **If no LiDAR data:**
+
 - Check LiDAR power: `lsusb | grep LiDAR`
 - Check serial port: `dmesg | grep ttyACM`
 - Check LiDAR node: `ros2 node list`
@@ -218,6 +260,7 @@ ros2 topic list | grep debug
 ```
 
 **Expected Output:**
+
 ```
 /debug/clusters_raw
 /debug/validated_poles
@@ -269,6 +312,7 @@ ros2 action list
 ```
 
 **Expected Output:**
+
 ```
 /track_poles
 ```
@@ -281,6 +325,7 @@ ros2 action info /track_poles
 ```
 
 **Expected Output:**
+
 ```
 Action: /track_poles
 Action Type: pole_detection/action/TrackPoles
@@ -305,6 +350,7 @@ ros2 action send_goal /track_poles pole_detection/action/TrackPoles "{start_trac
 ```
 
 **Expected Output:**
+
 ```
 Waiting for an action server to become available...
 Sending goal...
@@ -330,6 +376,7 @@ ros2 topic echo /track_poles/_action/feedback
 ```
 
 **Expected Continuous Output:**
+
 ```
 ---
 feedback:
@@ -361,6 +408,7 @@ feedback:
 In RViz, verify these displays are enabled:
 
 **Required Displays:**
+
 1. ✅ **Grid** - Reference frame
 2. ✅ **LiDAR Raw Data** - Point cloud display
 3. ✅ **Raw Clusters** - Orange spheres
@@ -455,28 +503,29 @@ ros2 launch pole_detection pole_detection.launch.py start_rviz:=true \
 When you launch in debug mode, RViz will display **comprehensive enhanced visualization** of the entire detection pipeline with detailed labels, markers, and real-time statistics.
 
 **For complete visualization guide, see:**
+
 - [ENHANCED_VISUALIZATION_GUIDE.md](file:///home/rc3/Desktop/n10p_lidar/docs/ENHANCED_VISUALIZATION_GUIDE.md) - Complete visualization reference
 
 ### Enhanced Visualization Features
 
-| Display Type | Topic | Color | Labels | Meaning |
-|-------------|-------|-------|---------|---------|
-| **Raw Clusters** | `/debug/clusters_raw` | 🟠 Orange | "C0", "C1", "C2"... | All candidate clusters with IDs |
-| **Validated Poles** | `/debug/validated_poles` | 🟢 Green | "85%", "92%"... | Accepted poles with confidence scores |
-| **Rejected Poles** | `/debug/rejected_poles` | 🔴 Red | "Too few points", "Wrong width"... | Rejected clusters with reasons |
-| **Tracked Poles** | `/debug/tracks` | 🟢 Green/🟡 Yellow | "T0", "T1", "T2"... | Tracked poles with IDs + arrows |
-| **Pattern Matches** | `/debug/pattern_matches` | 🟢 Green Lines | "185mm", "187mm"... | Pole spacing with distances |
-| **Pipeline Status** | `/debug/pipeline` | 📊 Text + Bars | Statistics + Progress bars | Real-time pipeline monitoring |
+| Display Type              | Topic                      | Color              | Labels                             | Meaning                               |
+| ------------------------- | -------------------------- | ------------------ | ---------------------------------- | ------------------------------------- |
+| **Raw Clusters**    | `/debug/clusters_raw`    | 🟠 Orange          | "C0", "C1", "C2"...                | All candidate clusters with IDs       |
+| **Validated Poles** | `/debug/validated_poles` | 🟢 Green           | "85%", "92%"...                    | Accepted poles with confidence scores |
+| **Rejected Poles**  | `/debug/rejected_poles`  | 🔴 Red             | "Too few points", "Wrong width"... | Rejected clusters with reasons        |
+| **Tracked Poles**   | `/debug/tracks`          | 🟢 Green/🟡 Yellow | "T0", "T1", "T2"...                | Tracked poles with IDs + arrows       |
+| **Pattern Matches** | `/debug/pattern_matches` | 🟢 Green Lines     | "185mm", "187mm"...                | Pole spacing with distances           |
+| **Pipeline Status** | `/debug/pipeline`        | 📊 Text + Bars     | Statistics + Progress bars         | Real-time pipeline monitoring         |
 
 ### Key Enhancements
 
-✅ **Larger, more visible markers** (8-12cm diameter)  
-✅ **Detailed text labels** on all markers  
-✅ **Rejection reasons** on rejected poles  
-✅ **Confidence scores** on validated poles  
-✅ **Distance measurements** on pattern matches  
-✅ **Pipeline statistics** with progress bars  
-✅ **Real-time performance metrics**  
+✅ **Larger, more visible markers** (8-12cm diameter)
+✅ **Detailed text labels** on all markers
+✅ **Rejection reasons** on rejected poles
+✅ **Confidence scores** on validated poles
+✅ **Distance measurements** on pattern matches
+✅ **Pipeline statistics** with progress bars
+✅ **Real-time performance metrics**
 
 ### Understanding Pipeline Visualization
 
@@ -497,31 +546,33 @@ Pattern Ratio: 100.00%
 ### Quick Visual Diagnostics
 
 1. **Orange Spheres Everywhere?**
+
    - **Problem**: Clustering too sensitive
    - **Solution**: Increase `cluster_tolerance` to 0.08m
    - **Command**: `ros2 param set /pole_detection cluster_tolerance 0.08`
-
 2. **No Green Spheres?**
+
    - **Problem**: Validation too strict
    - **Solution**: Check red labels for rejection reasons, adjust thresholds
    - **Command**: `ros2 param set /pole_detection min_point_count 3`
-
 3. **Yellow Spheres (Tentative Tracks)?**
+
    - **Problem**: Tracking not confirmed yet
    - **Solution**: Wait for 3+ detections or adjust `confirmation_threshold`
    - **Command**: `ros2 param set /pole_detection confirmation_threshold 2`
-
 4. **No Green Lines?**
+
    - **Problem**: Spacing incorrect (not 185mm ±10mm)
    - **Solution**: Check pole placement or adjust `distance_tolerance`
    - **Command**: `ros2 param set /pole_detection distance_tolerance 0.01`
-
 5. **Many Red Spheres?**
+
    - **Problem**: Validation rejecting too many candidates
    - **Solution**: Read rejection labels, adjust parameters accordingly
    - **Command**: Check red labels for specific reasons
 
 **For detailed visualization guide and troubleshooting, see:**
+
 - [ENHANCED_VISUALIZATION_GUIDE.md](file:///home/rc3/Desktop/n10p_lidar/docs/ENHANCED_VISUALIZATION_GUIDE.md)
 
 ---
@@ -533,6 +584,7 @@ Pattern Ratio: 100.00%
 **Symptoms**: No green spheres, no detected poles
 
 **Diagnosis Steps**:
+
 ```bash
 # 1. Check LiDAR connection
 ros2 topic hz /lslidar_point_cloud
@@ -551,6 +603,7 @@ ros2 topic list | grep debug
 ```
 
 **Solutions**:
+
 - **Serial port permissions**: Add user to dialout group (required for /dev/ttyACM0 access):
   ```bash
   sudo usermod -a -G dialout $USER
@@ -567,6 +620,7 @@ ros2 topic list | grep debug
 **Symptoms**: Too many green spheres, walls being detected
 
 **Solutions**:
+
 ```bash
 # Increase minimum width
 ros2 param set /pole_detection min_radial_width 0.008
@@ -586,6 +640,7 @@ ros2 topic hz /debug/validated_poles
 **Symptoms**: Poles visible but not detected
 
 **Solutions**:
+
 ```bash
 # Decrease minimum points per cluster
 ros2 param set /pole_detection cluster_min_size 2
@@ -605,6 +660,7 @@ ros2 topic hz /debug/validated_poles
 **Symptoms**: Slow response when moving between poles
 
 **Solutions**:
+
 ```bash
 # Increase jump detection threshold
 ros2 param set /pole_detection max_jump_distance 0.7
@@ -621,6 +677,7 @@ ros2 topic echo /track_poles/_action/feedback
 **Symptoms**: Action goal not accepted, no feedback
 
 **Diagnosis Steps**:
+
 ```bash
 # 1. Check action server
 ros2 action list
@@ -634,6 +691,7 @@ ros2 topic echo /rosout --filter "node_name=='pole_detection'"
 ```
 
 **Solutions**:
+
 - Verify action server is running: `ros2 action list`
 - Check action name: `/track_poles`
 - Verify action type: `pole_detection/action/TrackPoles` (full package path required)
@@ -645,6 +703,7 @@ ros2 topic echo /rosout --filter "node_name=='pole_detection'"
 **Symptoms**: RViz opens but no colored spheres or lines
 
 **Diagnosis Steps**:
+
 ```bash
 # 1. Check if debug topics are publishing
 ros2 topic list | grep debug
@@ -660,6 +719,7 @@ ros2 topic echo /debug/clusters_raw --once
 ```
 
 **Solutions**:
+
 - Verify RViz displays are enabled (check checkboxes)
 - Check RViz fixed frame is set to `laser_link`
 - Manually add displays if needed (see Phase 5.4)
@@ -671,12 +731,14 @@ ros2 topic echo /debug/clusters_raw --once
 **Symptoms**: Action command fails with type error
 
 **Diagnosis**:
+
 ```bash
 # Check correct action type
 ros2 interface show pole_detection/action/TrackPoles
 ```
 
 **Solutions**:
+
 - Use correct action type: `pole_detection/action/TrackPoles` (full package path required)
 - Correct command: `ros2 action send_goal /track_poles pole_detection/action/TrackPoles "{start_tracking: true}" --feedback`
 - Verify action is available: `ros2 action list`
@@ -713,6 +775,7 @@ ros2 topic echo /track_poles/_action/feedback
 ### Pipeline Performance
 
 Watch `/debug/pipeline` topic in RViz for real-time metrics:
+
 - Processing Rate: 10Hz
 - Latency: <10ms per frame
 - Action Feedback: 10Hz
@@ -842,11 +905,13 @@ ros2 param dump /pole_detection > current_params.yaml
 ## Configuration Modes
 
 ### Production Mode (`production_params.yaml`)
+
 - **Debug Publishing**: Disabled
 - **Stricter Filters**: Higher validation thresholds
 - **Performance Optimized**: Minimal computational overhead
 
 ### Debug Mode (`debug_params.yaml`)
+
 - **Visualization**: All debug markers enabled
 - **Relaxed Filters**: Lower thresholds for testing
 - **Detailed Logging**: Comprehensive pipeline monitoring
@@ -856,6 +921,7 @@ ros2 param dump /pole_detection > current_params.yaml
 ## Technical Specifications
 
 ### LiDAR Specifications
+
 - **Model**: N10-P
 - **Scan Rate**: 10Hz
 - **Points/Scan**: 3000
@@ -863,11 +929,13 @@ ros2 param dump /pole_detection > current_params.yaml
 - **Range**: 0.2m - 0.8m (optimized)
 
 ### Computational Requirements
+
 - **CPU**: Moderate (single-core optimized)
 - **Memory**: ~100MB typical usage
 - **ROS2**: Foxy or newer required
 
 ### Detection Performance
+
 - **Accuracy**: ±1cm position, ±2mm radius
 - **Latency**: <100ms end-to-end
 - **Range**: 0.2m - 0.8m optimal
@@ -875,6 +943,7 @@ ros2 param dump /pole_detection > current_params.yaml
 - **Action Feedback Rate**: 10Hz
 
 ### Tracking Performance
+
 - **Jump Detection**: <50ms response to target switches
 - **EMA Smoothing**: Configurable (default 0.3)
 - **Multi-Threading**: Non-blocking callbacks
@@ -885,12 +954,14 @@ ros2 param dump /pole_detection > current_params.yaml
 ## Maintenance Procedures
 
 ### Daily
+
 - Monitor detection performance metrics
 - Check for action server errors
 - Verify feedback latency (<100ms)
 - Check system logs
 
 ### Weekly
+
 - Verify LiDAR calibration and mounting
 - Check for software updates
 - Test with known pole configurations
@@ -898,6 +969,7 @@ ros2 param dump /pole_detection > current_params.yaml
 - Backup configuration files
 
 ### Monthly
+
 - Update parameters based on environment changes
 - Backup configuration files
 - Review and optimize performance

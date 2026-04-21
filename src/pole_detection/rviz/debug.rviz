@@ -68,6 +68,38 @@ Visualization Manager:
       Topic: /detected_poles_visuals
       Unreliable: false
       Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Debug Visualization
+      Namespaces:
+        {}
+      Topic: /debug_markers
+      Unreliable: false
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: false
+      Name: Accepted Candidates
+      Namespaces:
+        {}
+      Topic: /accepted_candidates
+      Unreliable: false
+      Value: false
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: false
+      Name: Rejected Candidates
+      Namespaces:
+        {}
+      Topic: /rejected_candidates
+      Unreliable: false
+      Value: false
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: false
+      Name: Pattern Matches
+      Namespaces:
+        {}
+      Topic: /pattern_matches
+      Unreliable: false
+      Value: false
     - Class: rviz_default_plugins/TF
       Enabled: true
       Frame Timeout: 1
