@@ -43,11 +43,22 @@ pole_detection:
     min_angular_span: 10.0         # Slightly stricter than debug
     max_angular_span: 30.0         # Slightly stricter
     
+    # Acceptance threshold
+    acceptance_threshold: 0.60     # Score ≥ 0.60 → accept candidate
+    
     # Weights
     weight_point_count: 0.30
     weight_bbox_area: 0.35         # PRIMARY FEATURE
     weight_radial_width: 0.25
     weight_range: 0.10
+    
+    # ========================================
+    # Debug Visualization Parameters
+    # ========================================
+    publish_debug_clusters: true    # Orange spheres for raw clusters
+    publish_debug_validation: true  # Green/red spheres for accepted/rejected
+    publish_debug_tracks: true      # Yellow/green spheres for tracked poles
+    publish_debug_pattern: true     # Blue lines for pattern matches
     
     # ========================================
     # Tracker Parameters (TIGHTER for stability - match relaxed clustering)

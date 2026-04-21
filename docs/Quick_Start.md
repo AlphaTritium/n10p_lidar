@@ -11,7 +11,7 @@ colcon build --packages-select pole_detection lslidar_driver lslidar_msgs
 # Source workspace
 source install/setup.bash
 
-# Launch in debug mode (recommended for hands-on)
+# Launch
 ros2 launch pole_detection pole_detection.launch.py start_rviz:=true
 ```
 
@@ -39,6 +39,7 @@ ros2 launch pole_detection pole_detection.launch.py start_rviz:=false
 ```
 
 **Note**: The LiDAR driver now starts automatically without manual lifecycle management. If you encounter "Node not found" errors, ensure you've rebuilt after recent changes:
+
 ```bash
 colcon build --packages-select lslidar_driver
 source install/setup.bash
@@ -47,11 +48,13 @@ source install/setup.bash
 ### RViz Visualization
 
 **Launch with RViz** (recommended - handles X11/Wayland issues automatically):
+
 ```bash
 ros2 launch pole_detection pole_detection.launch.py start_rviz:=true
 ```
 
 **Manual RViz Launch** (if launching separately):
+
 ```bash
 # Fix for Wayland/Snap conflicts
 export QT_QPA_PLATFORM=xcb
@@ -59,6 +62,7 @@ rviz2 -d src/pole_detection/rviz/debug.rviz
 ```
 
 **If RViz crashes with symbol lookup error**:
+
 ```bash
 # This is a Snap package issue. Solutions:
 # 1. Use the launch file method above (has fix built-in)
@@ -166,7 +170,9 @@ ros2 topic echo /debug/tracks
 
 ---
 
-## Complete Debugging Workflow
+## Comprehensive Testing Guide
+
+This section provides step-by-step testing procedures to verify all system components are working correctly: Detection, Visualization, ROS Communication, and Action Server.
 
 ### Phase 1: System Startup Verification
 
@@ -192,6 +198,252 @@ colcon build --packages-select pole_detection
 # Source workspace
 source install/setup.bash
 ```
+
+### Phase 2: Detection Testing
+
+#### Step 2.1: Verify LiDAR Data Flow
+
+```bash
+# Check if LiDAR point cloud is being published
+ros2 topic info /lslidar_point_cloud
+# Expected: Publisher count > 0, Type: sensor_msgs/msg/PointCloud2
+
+# Monitor point cloud data (first 100 points)
+ros2 topic echo /lslidar_point_cloud --field data --length 1 | head -100
+
+# Check point cloud frequency
+ros2 topic hz /lslidar_point_cloud
+# Expected: ~10-20Hz depending on LiDAR model
+```
+
+#### Step 2.2: Test Pole Detection Pipeline
+
+```bash
+# Monitor detected objects
+ros2 topic echo /detected_objects
+# Should show DetectedObjects messages with object arrays
+
+# Monitor detected poles specifically
+ros2 topic echo /detected_poles
+# Should show pole-specific detection data
+
+# Check detection frequency
+ros2 topic hz /detected_poles
+# Expected: ~10Hz (matches LiDAR frequency)
+```
+
+### Phase 3: Visualization Testing
+
+#### Step 3.1: Verify Debug Topics
+
+```bash
+# Check all debug visualization topics are active
+ros2 topic list | grep debug
+# Expected: /debug/clusters, /debug/accepted, /debug/rejected, /debug/pattern_matches, /debug/tracks
+
+# Monitor cluster visualization
+ros2 topic echo /debug/clusters --no-arr | head -5
+
+# Monitor accepted/rejected candidates
+ros2 topic echo /debug/accepted --no-arr | head -5
+ros2 topic echo /debug/rejected --no-arr | head -5
+```
+
+#### Step 3.2: RViz Visualization Verification
+
+```bash
+# Launch RViz with debug configuration
+ros2 run rviz2 rviz2 -d src/pole_detection/rviz/debug.rviz
+```
+
+**Expected RViz Visualizations:**
+- ✅ **White Points**: LiDAR raw data (PointCloud2)
+- ✅ **Orange Spheres**: Raw clusters (0.1m diameter)
+- ✅ **Green Spheres**: Accepted candidates (0.08m diameter)
+- ✅ **Red Spheres**: Rejected candidates (0.05m diameter)
+- ✅ **Blue Lines**: Pattern matches between poles
+- ✅ **Yellow/Green Spheres**: Tracked poles with ID labels
+
+#### Step 3.3: TF Frame Verification
+
+```bash
+# Check TF frames are properly published
+ros2 run tf2_tools view_frames
+# Should show base_link → laser_link transform
+
+# Monitor TF tree
+ros2 run tf2_ros tf2_monitor
+# Should show stable frame relationships
+```
+
+### Phase 4: ROS Communication Testing
+
+#### Step 4.1: Node and Topic Verification
+
+```bash
+# List all active nodes
+ros2 node list
+# Expected: /pole_detection, /track_poles_action_server, /static_tf_pub, /rviz2
+
+# List all active topics
+ros2 topic list
+# Should include all detection, debug, and action topics
+
+# Check topic types
+ros2 topic type /detected_poles
+# Expected: pole_detection/msg/DetectedObjects
+
+ros2 topic type /track_poles/_action/feedback
+# Expected: pole_detection/action/TrackPoles_FeedbackMessage
+```
+
+#### Step 4.2: Parameter Verification
+
+```bash
+# Check all pole detection parameters
+ros2 param list /pole_detection
+# Should show cluster, validation, tracking, and debug parameters
+
+# Verify critical parameters
+ros2 param get /pole_detection publish_debug_clusters
+# Expected: true
+
+ros2 param get /pole_detection publish_debug_validation
+# Expected: true
+
+ros2 param get /pole_detection publish_debug_tracks
+# Expected: true
+```
+
+### Phase 5: Action Server Testing
+
+#### Step 5.1: Action Server Verification
+
+```bash
+# Check if action server is available
+ros2 action list
+# Should include /track_poles
+
+# Get action server information
+ros2 action info /track_poles
+# Should show status and connected clients
+
+# Check action interface
+ros2 interface show pole_detection/action/TrackPoles
+# Should show goal, result, and feedback definitions
+```
+
+#### Step 5.2: Action Server Functional Testing
+
+```bash
+# Send start tracking command
+ros2 action send_goal /track_poles pole_detection/action/TrackPoles "{start_tracking: true}" --feedback
+
+# Monitor action feedback in real-time
+ros2 topic echo /track_poles/_action/feedback
+# Should show tracking status, pole counts, and confidence levels
+
+# Send stop tracking command
+ros2 action send_goal /track_poles pole_detection/action/TrackPoles "{start_tracking: false}"
+```
+
+#### Step 5.3: Action Server Integration Testing
+
+```bash
+# Test action with behavior tree integration
+ros2 action send_goal /track_poles pole_detection/action/TrackPoles "{start_tracking: true, timeout_seconds: 30}" --feedback
+
+# Monitor action result
+ros2 topic echo /track_poles/_action/result
+# Should show final tracking results and statistics
+```
+
+### Phase 6: Performance Testing
+
+#### Step 6.1: System Performance Monitoring
+
+```bash
+# Monitor system resource usage
+ros2 run system_monitor system_monitor
+
+# Check node performance
+ros2 node info /pole_detection
+# Should show publishers, subscribers, and services
+
+# Monitor message latency
+ros2 topic delay /detected_poles
+# Should be < 100ms for real-time operation
+```
+
+#### Step 6.2: Detection Performance Testing
+
+```bash
+# Monitor detection statistics over time
+ros2 topic hz /detected_poles --window 100
+# Should maintain stable frequency
+
+# Check detection latency
+ros2 topic delay /lslidar_point_cloud /detected_poles
+# Should be < 50ms for real-time detection
+```
+
+### Phase 7: Troubleshooting Common Issues
+
+#### Issue: No LiDAR Data
+```bash
+# Check if LiDAR device is detected
+ls /dev/ttyACM* /dev/ttyUSB*
+
+# Check LiDAR driver status
+ros2 node info /lslidar_driver_node
+
+# Verify LiDAR parameters
+ros2 param list /lslidar_driver_node
+```
+
+#### Issue: No Visualizations in RViz
+```bash
+# Check debug topics are publishing
+ros2 topic info /debug/clusters
+
+# Verify frame transforms
+ros2 run tf2_ros tf2_echo base_link laser_link
+
+# Check RViz configuration
+cat src/pole_detection/rviz/debug.rviz | grep Frame
+```
+
+#### Issue: Action Server Not Responding
+```bash
+# Check action server status
+ros2 node info /track_poles_action_server
+
+# Verify action interface
+ros2 interface show pole_detection/action/TrackPoles
+
+# Test with simple goal
+ros2 action send_goal /track_poles pole_detection/action/TrackPoles "{start_tracking: true}"
+```
+
+## Quick Testing Commands Summary
+
+For rapid verification, use these essential commands:
+
+```bash
+# System health check
+ros2 node list && ros2 topic list | grep -E "(debug|detected|track)"
+
+# Detection verification
+ros2 topic hz /detected_poles && ros2 topic echo /detected_poles --no-arr | head -3
+
+# Visualization check
+ros2 topic list | grep debug && ros2 topic info /debug/clusters
+
+# Action server test
+ros2 action list && ros2 action send_goal /track_poles pole_detection/action/TrackPoles "{start_tracking: true}" --feedback
+```
+
+This comprehensive testing guide ensures all system components are functioning correctly before deployment.
 
 #### Step 1.3: Launch System
 

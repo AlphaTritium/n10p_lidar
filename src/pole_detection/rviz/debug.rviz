@@ -62,44 +62,45 @@ Visualization Manager:
       Value: true
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
-      Name: Detection Markers
+      Name: Raw Clusters
       Namespaces:
-        pole_tracking: true
-      Topic: /detected_poles_visuals
+        clusters: true
+      Topic: /debug/clusters
       Unreliable: false
       Value: true
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
-      Name: Debug Visualization
+      Name: Accepted Candidates
       Namespaces:
-        {}
-      Topic: /debug_markers
+        accepted: true
+      Topic: /debug/accepted
+      Unreliable: false
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Rejected Candidates
+      Namespaces:
+        rejected: true
+      Topic: /debug/rejected
+      Unreliable: false
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Pattern Matches
+      Namespaces:
+        pattern_matches: true
+      Topic: /debug/pattern_matches
       Unreliable: false
       Value: true
     - Class: rviz_default_plugins/MarkerArray
       Enabled: false
-      Name: Accepted Candidates
+      Name: Tracked Poles
       Namespaces:
-        {}
-      Topic: /accepted_candidates
+        tracked_poles: true
+        track_ids: true
+      Topic: /debug/tracks
       Unreliable: false
-      Value: false
-    - Class: rviz_default_plugins/MarkerArray
-      Enabled: false
-      Name: Rejected Candidates
-      Namespaces:
-        {}
-      Topic: /rejected_candidates
-      Unreliable: false
-      Value: false
-    - Class: rviz_default_plugins/MarkerArray
-      Enabled: false
-      Name: Pattern Matches
-      Namespaces:
-        {}
-      Topic: /pattern_matches
-      Unreliable: false
-      Value: false
+      Value: true
     - Class: rviz_default_plugins/TF
       Enabled: true
       Frame Timeout: 1

@@ -1,7 +1,7 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, LogInfo, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, LogInfo, IncludeLaunchDescription, ExecuteProcess
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
-from launch.conditions import IfCondition
+from launch.conditions import IfCondition, UnlessCondition
 from launch_ros.substitutions import FindPackageShare
 from launch_ros.actions import Node
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -34,8 +34,7 @@ def generate_launch_description():
             description='LiDAR serial port device (used if not specified in YAML)'
         ),
         
-        # LiDAR Driver - Dynamic selection based on lidar_model argument
-        # Default: N10-P using lsn10p_launch.py with YAML configuration
+        # LiDAR Driver - Always launch for real hardware operation
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource([
                 PathJoinSubstitution([
@@ -48,8 +47,7 @@ def generate_launch_description():
                         "'lsm10_uart_launch.py'"
                     ])
                 ])
-            ]),
-            condition=IfCondition(PythonExpression(["'", LaunchConfiguration('lidar_model'), "' in ['n10p', 'n10', 'm10p', 'm10']"]))
+            ])
         ),
         
         # Pole Detection Node (UNIFIED Configuration)
@@ -83,12 +81,12 @@ def generate_launch_description():
             ]
         ),
         
-        # Static Transform Publisher
+        # Static Transform Publisher - Use laser_link to match LiDAR driver
         Node(
             package='tf2_ros',
             executable='static_transform_publisher',
             name='static_tf_pub',
-            arguments=['0', '0', '0.1', '0', '0', '0', 'base_link', 'laser'],
+            arguments=['0', '0', '0.1', '0', '0', '0', 'base_link', 'laser_link'],
             output='screen'
         ),
         
