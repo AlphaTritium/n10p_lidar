@@ -49,7 +49,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 # Executable: pole_detection_node (Unified implementation)
 # ============================================
 add_executable(pole_detection_node
-  src/pole_detection_unified.cpp
+  src/pole_detection.cpp
 )
 
 # Add dependency on generated action interface
