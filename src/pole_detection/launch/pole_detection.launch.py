@@ -84,7 +84,8 @@ def generate_launch_description():
                 'debug.rviz'
             ])],
             condition=IfCondition(LaunchConfiguration('start_rviz')),
-            output='screen'
+            output='screen',
+            additional_env={'QT_QPA_PLATFORM': 'xcb'}  # Force X11 to avoid Wayland/Snap conflicts
         ),
         
         LogInfo(msg=[

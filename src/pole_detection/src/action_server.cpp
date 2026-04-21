@@ -99,7 +99,7 @@ private:
   
   // Cancel request handler (preemptability)
   rclcpp_action::CancelResponse handleCancel(
-    const std::shared_ptr<GoalHandleTrackPoles> goal_handle)
+    const std::shared_ptr<GoalHandleTrackPoles> /*goal_handle*/)
   {
     RCLCPP_INFO(this->get_logger(), "收到取消请求");
     
@@ -246,7 +246,7 @@ private:
   // Core algorithm for pole detection and tracking
   // ==========================================================================
   
-  bool processDetection(std::shared_ptr<const TrackPoles::Goal> goal)
+  bool processDetection(std::shared_ptr<const TrackPoles::Goal> /*goal*/)
   {
     std::lock_guard<std::mutex> lock(detection_mutex_);
     
