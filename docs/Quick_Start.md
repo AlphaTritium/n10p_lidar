@@ -6,13 +6,32 @@
 
 ```bash
 # Build workspace
-colcon build --packages-select pole_detection
+colcon build --packages-select pole_detection lslidar_driver lslidar_msgs
 
 # Source workspace
 source install/setup.bash
 
 # Launch in debug mode (recommended for hands-on)
 ros2 launch pole_detection pole_detection.launch.py start_rviz:=true
+```
+
+**Note**: This automatically starts the N10-P LiDAR driver with default configuration (`/dev/ttyACM0`).
+
+### LiDAR Driver Configuration
+
+**Quick Configuration Options**:
+
+```bash
+# Use different serial port
+ros2 launch pole_detection pole_detection.launch.py serial_port:=/dev/ttyUSB0
+
+# Use different LiDAR model
+ros2 launch pole_detection pole_detection.launch.py lidar_model:=n10    # For N10
+ros2 launch pole_detection pole_detection.launch.py lidar_model:=m10p  # For M10-P
+ros2 launch pole_detection pole_detection.launch.py lidar_model:=m10   # For M10
+
+# Production mode (no RViz)
+ros2 launch pole_detection pole_detection.launch.py start_rviz:=false
 ```
 
 ### Using Action Server - CORRECTED COMMANDS

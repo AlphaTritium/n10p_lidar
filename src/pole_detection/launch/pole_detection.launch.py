@@ -1,6 +1,6 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, LogInfo, IncludeLaunchDescription
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch.conditions import IfCondition
 from launch_ros.substitutions import FindPackageShare
 from launch_ros.actions import Node
@@ -22,15 +22,34 @@ def generate_launch_description():
             description='Start RViz with debug visualization'
         ),
         
-        # LiDAR Driver - using n10p_driver approach with YAML configuration
+        DeclareLaunchArgument(
+            'lidar_model',
+            default_value='n10p',
+            description='LiDAR model: n10p, n10, m10, m10p (default: n10p)'
+        ),
+        
+        DeclareLaunchArgument(
+            'serial_port',
+            default_value='/dev/ttyACM0',
+            description='LiDAR serial port device (used if not specified in YAML)'
+        ),
+        
+        # LiDAR Driver - Dynamic selection based on lidar_model argument
+        # Default: N10-P using lsn10p_launch.py with YAML configuration
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource([
                 PathJoinSubstitution([
                     FindPackageShare('lslidar_driver'),
                     'launch',
-                    'lsn10p_launch.py'
+                    PythonExpression([
+                        "'lsn10p_launch.py' if '", LaunchConfiguration('lidar_model'), "' == 'n10p' else ",
+                        "'lsn10_launch.py' if '", LaunchConfiguration('lidar_model'), "' == 'n10' else ",
+                        "'lsm10p_uart_launch.py' if '", LaunchConfiguration('lidar_model'), "' == 'm10p' else ",
+                        "'lsm10_uart_launch.py'"
+                    ])
                 ])
-            ])
+            ]),
+            condition=IfCondition(PythonExpression(["'", LaunchConfiguration('lidar_model'), "' in ['n10p', 'n10', 'm10p', 'm10']"]))
         ),
         
         # Pole Detection Node (UNIFIED Configuration)
@@ -90,6 +109,8 @@ def generate_launch_description():
         
         LogInfo(msg=[
             '🔍 Pole Detection System launched with UNIFIED configuration ',
-            '(Combines production stability with debug visibility)'
+            '(Combines production stability with debug visibility)\n',
+            '📡 LiDAR Model: ', LaunchConfiguration('lidar_model'), '\n',
+            '🔌 Serial Port: ', LaunchConfiguration('serial_port')
         ]),
     ])

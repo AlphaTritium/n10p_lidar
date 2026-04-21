@@ -18,6 +18,7 @@ Autonomous detection of 6 static poles (25mm diameter, 185mm spacing) using N10-
 - ✅ **Multi-threading**: Real-time performance with non-blocking callbacks
 - ✅ **Enhanced Tracking**: Configurable smoothing and jump detection parameters
 - ✅ **Simplified Structure**: Consolidated from 10+ files to 3 main files
+- ✅ **Unified Launch System**: Single entry point with dynamic LiDAR model selection
 
 ---
 
@@ -26,14 +27,16 @@ Autonomous detection of 6 static poles (25mm diameter, 185mm spacing) using N10-
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    Hardware Layer                         │
-│  N10-P 2D LiDAR → Serial (/dev/ttyACM0) @ 921600 baud │
+│  N10-P 2D LiDAR → Serial (/dev/ttyACM0) @ 460800 baud │
 └───────────────────┬─────────────────────────────────────────┘
                     │
                     ▼
 ┌─────────────────────────────────────────────────────────────┐
 │               ROS2 Driver Layer                          │
-│  lslidar_driver_node                                   │
+│  lslidar_driver_node (LifecycleNode)                    │
+│  - Config: params/lidar_uart_ros2/lsn10p.yaml           │
 │  - Publish: /lslidar_point_cloud (sensor_msgs/PointCloud2) │
+│  - Publish: /scan (sensor_msgs/LaserScan)                  │
 │  - TF: laser_link coordinate frame                        │
 └───────────────────┬─────────────────────────────────────────┘
                     │
@@ -64,6 +67,8 @@ Autonomous detection of 6 static poles (25mm diameter, 185mm spacing) using N10-
 │  - Thread-safe data access                                 │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+**Note**: The LiDAR driver is automatically launched by `pole_detection.launch.py` with the correct N10-P configuration.
 
 ---
 
@@ -120,7 +125,7 @@ pole_detection/
 
 **Class Structure**:
 
-```cpp
+``cpp
 // SECTION 1: CLUSTERER CLASS
 // Extracts pole candidates from point clouds using Euclidean clustering
 class Clusterer {
@@ -190,7 +195,7 @@ class PoleDetectionNode : public rclcpp::Node {
 
 **Smart EMA Update**:
 
-```cpp
+``cpp
 // Jump detection prevents latency during target switching
 double jump_dist = std::hypot(pos.x - position.x, pos.y - position.y);
 if (jump_dist > max_jump_distance) {
