@@ -26,7 +26,6 @@
   <build_depend>pcl_filters</build_depend>
   <build_depend>pcl_features</build_depend>
   <build_depend>pcl_kdtree</build_depend>
-  <build_depend>lslidar_msgs</build_depend>
   
   <!-- Execution dependencies -->
   <exec_depend>rclcpp</exec_depend>
@@ -44,7 +43,6 @@
   <exec_depend>pcl_filters</exec_depend>
   <exec_depend>pcl_features</exec_depend>
   <exec_depend>pcl_kdtree</exec_depend>
-  <exec_depend>lslidar_msgs</exec_depend>
   
   <member_of_group>rosidl_interface_packages</member_of_group>
   

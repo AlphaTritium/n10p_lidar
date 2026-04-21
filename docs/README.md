@@ -69,27 +69,27 @@ Autonomous detection of 6 static poles (25mm diameter, 185mm spacing) using N10-
 
 ## File Structure
 
-### Simplified Architecture (3 Main Files)
+### Simplified Architecture (Unified Implementation)
 
 ```
 pole_detection/
 ├── include/                    # Headers directly here (no subdirectory)
-│   ├── pole_detection_node.hpp   # Main node header
-│   ├── tracker.hpp              # Tracker class header
-│   └── types.hpp               # Shared types
+│   ├── pole_detection_node.hpp   # Unified header with all class definitions
+│   └── types.hpp               # Shared types and data structures
 ├── src/
-│   ├── pole_detection_node.cpp   # Main node (all inline functions)
-│   ├── tracker.cpp              # Tracker implementation
+│   ├── pole_detection_unified.cpp  # All processing logic in single file
 │   └── action_server.cpp       # Standalone action server
 ├── config/
-│   ├── debug_params.yaml        # Debug parameters
-│   ├── debug_visualization.rviz # RViz debug config
-│   └── production_params.yaml  # Production parameters
+│   └── params.yaml             # Configuration parameters
 ├── launch/
-│   ├── pole_detection.launch.py  # Main launch file
-│   └── pole_detection_debug.launch.py  # Debug launch file
+│   └── pole_detection.launch.py  # Main launch file
 ├── action/
 │   └── TrackPoles.action      # ROS2 action definition
+├── msg/
+│   ├── DetectedObject.msg       # Single detected object message
+│   └── DetectedObjects.msg      # Array of detected objects
+├── rviz/
+│   └── debug.rviz             # RViz debug configuration
 ├── CMakeLists.txt             # Build configuration
 └── package.xml               # Package metadata
 ```
@@ -97,68 +97,84 @@ pole_detection/
 ### Key Simplifications
 
 **Before**: 10+ source files with scattered logic  
-**After**: 3 main source files with consolidated pipeline
+**After**: 2 main source files (unified + action server)
 
 **Before**: Headers in `include/pole_detection/` subdirectory  
 **After**: Headers directly in `include/` directory
 
 **Before**: Complex include paths with namespace prefixes  
-**After**: Simple includes like `#include "tracker.hpp"`
+**After**: Simple includes like `#include "types.hpp"`
+
+**Before**: Multiple implementation files (clusterer.cpp, validator.cpp, tracker.cpp, pattern_matcher.cpp)  
+**After**: Single unified implementation file (pole_detection_unified.cpp)
 
 ---
 
 ## Module Analysis
 
-### Main Node (Consolidated Pipeline)
+### Main Node (Unified Implementation)
 
-**File**: [pole_detection_node.cpp](file:///home/rc2/FINN/pole/n10p_lidar/src/pole_detection/src/pole_detection_node.cpp)
+**File**: [pole_detection_unified.cpp](file:///home/rc3/Desktop/n10p_lidar/src/pole_detection/src/pole_detection_unified.cpp)
 
-**Architecture**: All pipeline logic inline in single file
+**Architecture**: All pipeline logic consolidated in single file with class-based design
 
-**Inline Functions**:
+**Class Structure**:
 
 ```cpp
-// Preprocessing
-pcl::PointCloud<pcl::PointXYZI>::Ptr preprocessCloud(
-  const sensor_msgs::msg::PointCloud2::ConstSharedPtr& input,
-  double range_min, double range_max, double z_min, double z_max)
+// SECTION 1: CLUSTERER CLASS
+// Extracts pole candidates from point clouds using Euclidean clustering
+class Clusterer {
+  std::vector<PoleCandidate> extractClusters(
+    const pcl::PointCloud<pcl::PointXYZI>::ConstPtr& cloud,
+    const std_msgs::msg::Header& header);
+  
+  // Feature extraction methods
+  ClusterFeatures extractArcFeatures(...);
+  double computeArcLength(...);
+  double computeAngularSpan(...);
+  double computeRadialWidth(...);
+  double fitCircleCurvature(...);
+  void sortPointsByAngle(...);
+};
 
-// Clustering
-std::vector<PoleCandidate> extractClusters(
-  const pcl::PointCloud<pcl::PointXYZI>::ConstPtr& cloud,
-  const std_msgs::msg::Header& header,
-  double cluster_tolerance, int cluster_min_size, int cluster_max_size,
-  rclcpp::Logger logger)
+// SECTION 2: VALIDATOR CLASS
+// Multi-feature validation to filter false positives
+class validator {
+  std::vector<PoleCandidate> validate(
+    const std::vector<PoleCandidate>& candidates,
+    const pcl::PointCloud<pcl::PointXYZI>::ConstPtr& cloud);
+  
+  double computeLikelihoodScore(...);
+  std::string generateRejectionReason(...);
+};
 
-// Validation
-std::vector<PoleCandidate> validateCandidates(
-  const std::vector<PoleCandidate>& candidates,
-  double min_point_count, double max_point_count,
-  double min_bbox_area, double max_bbox_area,
-  double min_radial_width, double max_radial_width,
-  double max_range, double acceptance_threshold,
-  rclcpp::Logger logger)
+// SECTION 3: PATTERN MATCHER CLASS
+// Detects pole line patterns with strict colinearity
+class PatternMatcher {
+  PatternMatchResult match(const std::vector<TrackedPole>& poles);
+  
+  bool arePolesColinear(...);
+  std::vector<TrackedPole> sortPolesAlongLine(...);
+  std::map<std::pair<int, int>, double> createDistanceMap(...);
+};
 
-// Pattern Matching
-PatternMatchResult matchPattern(
-  const std::vector<TrackedPole>& poles,
-  double expected_distance, double distance_tolerance,
-  double colinearity_tolerance, int min_poles_for_pattern,
-  rclcpp::Logger logger)
+// SECTION 4: TRACKER CLASS
+// Multi-object tracking with EMA smoothing
+class Tracker {
+  std::vector<TrackedPole> update(
+    const std::vector<PoleCandidate>& detections,
+    const std_msgs::msg::Header& header);
+  
+  void publishDebugMarkers(...);
+};
 
-// Debug Visualization
-void publishDebugMarkers(
-  const std::vector<PoleCandidate>& candidates,
-  const std::vector<PoleCandidate>& validated,
-  const std::vector<TrackedPole>& tracked,
-  const PatternMatchResult& match_result,
-  const std_msgs::msg::Header& header,
-  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr clusters_pub,
-  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr validated_pub,
-  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr rejected_pub,
-  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr tracks_pub,
-  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pattern_pub,
-  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pipeline_pub)
+// SECTION 5: POLE DETECTION NODE CLASS
+// Main node that orchestrates the complete pole detection pipeline
+class PoleDetectionNode : public rclcpp::Node {
+  // Subscribers and publishers
+  // Action server implementation
+  // Module initialization and orchestration
+};
 ```
 
 **Performance**:
@@ -166,9 +182,9 @@ void publishDebugMarkers(
 - **Memory Usage**: ~100MB
 - **CPU Usage**: ~20% (single core)
 
-### Tracker Module (Separate Class)
+### Tracker Module (Integrated in Unified File)
 
-**File**: [tracker.cpp](file:///home/rc2/FINN/pole/n10p_lidar/src/pole_detection/src/tracker.cpp)
+**File**: [pole_detection_unified.cpp](file:///home/rc3/Desktop/n10p_lidar/src/pole_detection/src/pole_detection_unified.cpp) - Tracker class
 
 **Algorithm**: Nearest neighbor association with smart EMA smoothing (jump detection)
 
@@ -177,7 +193,7 @@ void publishDebugMarkers(
 ```cpp
 // Jump detection prevents latency during target switching
 double jump_dist = std::hypot(pos.x - position.x, pos.y - position.y);
-if (jump_dist > max_jump_distance_) {
+if (jump_dist > max_jump_distance) {
     // Immediate reset on large jumps (target switch detection)
     position.x = pos.x;
     position.y = pos.y;
@@ -227,8 +243,8 @@ Stale (>30 frames) → Remove
 
 | Topic Name              | Message Type                            | QoS            | Description     |
 | --------------------- | --------------------------------------- | ------------- | -------------- |
-| `/detected_poles`   | `lslidar_msgs/msg/DetectedObjects` | Reliable, depth=10 | Final pole positions |
-| `/detected_objects` | `lslidar_msgs/msg/DetectedObjects` | Reliable, depth=10 | Backward-compatible alias |
+| `/detected_poles`   | `pole_detection/msg/DetectedObjects` | Reliable, depth=10 | Final pole positions |
+| `/detected_objects` | `pole_detection/msg/DetectedObjects` | Reliable, depth=10 | Backward-compatible alias |
 
 #### Debug Topics (when enabled):
 
@@ -358,7 +374,7 @@ publish_debug_pattern: true
 ### Build Instructions
 
 ```bash
-cd /home/rc2/FINN/pole/n10p_lidar
+cd /home/rc3/Desktop/n10p_lidar
 colcon build --packages-select pole_detection
 source install/setup.bash
 ```
@@ -373,12 +389,6 @@ ros2 run pole_detection pole_detection_node
 
 ```bash
 ros2 launch pole_detection pole_detection.launch.py
-```
-
-### Run with Debug Visualization
-
-```bash
-ros2 launch pole_detection pole_detection_debug.launch.py
 ```
 
 ### Run Standalone Action Server
@@ -410,9 +420,9 @@ ros2 action send_goal /track_poles pole_detection/action/TrackPoles "{start_trac
 ### Build Issues
 If build fails, try:
 ```bash
-cd /home/rc2/FINN/pole/n10p_lidar
+cd /home/rc3/Desktop/n10p_lidar
 rm -rf build install log
-colcon build
+colcon build --packages-select pole_detection
 ```
 
 ### Runtime Issues
@@ -475,7 +485,6 @@ If topics are not published:
 ```cpp
 // In source files
 #include "pole_detection_node.hpp"
-#include "tracker.hpp"
 #include "types.hpp"
 
 // No namespace prefixes needed!
@@ -485,9 +494,8 @@ If topics are not published:
 ```bash
 # Headers are directly accessible
 include/
-├── pole_detection_node.hpp
-├── tracker.hpp
-└── types.hpp
+├── pole_detection_node.hpp  # All class definitions
+└── types.hpp               # Shared types
 ```
 
 ---
@@ -496,14 +504,16 @@ include/
 
 The pole detection package has been successfully restructured and optimized:
 
-✅ **File structure simplified** - From 10+ files to 3 main files  
+✅ **File structure simplified** - From 10+ files to 2 main source files  
 ✅ **Header organization simplified** - Direct in `include/` directory  
 ✅ **Build system updated** - Clean CMakeLists.txt and package.xml  
-✅ **Dependencies optimized** - Removed unused dependencies  
+✅ **Dependencies optimized** - Removed lslidar_msgs dependency, using local messages  
 ✅ **Include paths simplified** - Direct paths without namespace prefixes  
 ✅ **Build successful** - Compiles without errors  
 ✅ **Runtime successful** - Node runs and processes data correctly  
 ✅ **All features working** - Clustering, validation, tracking, pattern matching  
+✅ **Unified implementation** - All processing logic in single file  
+✅ **KISS principle applied** - Simple, maintainable code structure  
 
 The codebase is now:
 - **Simpler** - Easy to understand and navigate
@@ -515,7 +525,7 @@ The codebase is now:
 ---
 
 **Status**: ✅ **COMPLETE AND WORKING**
-**Date**: 2026-04-16
+**Date**: 2026-04-21
 **Build**: ✅ SUCCESS
 **Runtime**: ✅ SUCCESS
-**Structure**: Simplified and optimized
+**Structure**: Unified and simplified

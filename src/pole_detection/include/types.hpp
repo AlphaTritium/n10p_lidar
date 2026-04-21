@@ -4,6 +4,8 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/point.hpp>
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
 #include <vector>
 #include <string>
 
@@ -23,7 +25,7 @@ struct ClusterFeatures
   double arc_length;           // NOW: Bounding box AREA (m²)
   double angular_span;         // UNUSED (kept for compatibility)
   double radial_width;         // MAX DIMENSION (not radius!)
-  double curvature_estimate;   // NOW: Convex hull AREA (m²)
+  double curvature;   // NOW: Convex hull AREA (m²)
   
   // Intensity
   double avg_intensity;
@@ -42,7 +44,7 @@ struct ClusterFeatures
     , arc_length(0.0)          // Bbox area
     , angular_span(0.0)
     , radial_width(0.0)        // Max dimension
-    , curvature_estimate(0.0)  // Convex hull area
+    , curvature(0.0)  // Convex hull area
     , avg_intensity(0.0)
     , intensity_variance(0.0)
     , range_from_sensor(0.0)
@@ -122,6 +124,18 @@ struct ClusterDebugInfo
   geometry_msgs::msg::Point centroid;
   bool was_accepted;
   std::string reason;
+};
+
+struct PatternMatchResult
+{
+  int matches;                    // Number of matching pole pairs
+  int total_pairs;                // Total possible pairs
+  double match_ratio;             // matches / total_pairs
+  std::vector<std::pair<int, int>> matched_pairs;  // Indices of matching poles
+  
+  PatternMatchResult()
+    : matches(0), total_pairs(0), match_ratio(0.0)
+  {}
 };
 
 }  // namespace pole_detection

@@ -6,7 +6,7 @@
 
 ```bash
 # Build workspace
-colcon build --packages-select pole_detection lslidar_driver
+colcon build --packages-select pole_detection
 
 # Source workspace
 source install/setup.bash
@@ -68,7 +68,7 @@ ros2 param set /pole_detection max_jump_distance 0.5
 ```
 
 **For detailed parameter tuning guide, see:**
-- [PARAMETER_TUNING_GUIDE.md](file:///home/rc2/FINN/pole/n10p_lidar/docs/PARAMETER_TUNING_GUIDE.md) - Complete vibration fix guide
+- [PARAMETER_TUNING_GUIDE.md](file:///home/rc3/Desktop/n10p_lidar/docs/PARAMETER_TUNING_GUIDE.md) - Complete vibration fix guide
 
 ---
 
@@ -103,7 +103,7 @@ ros2 topic echo /debug/tracks
 - ✅ High tracking confidence
 
 **For detailed troubleshooting, see:**
-- [PARAMETER_TUNING_GUIDE.md](file:///home/rc2/FINN/pole/n10p_lidar/docs/PARAMETER_TUNING_GUIDE.md)
+- [PARAMETER_TUNING_GUIDE.md](file:///home/rc3/Desktop/n10p_lidar/docs/PARAMETER_TUNING_GUIDE.md)
 
 ---
 
@@ -128,7 +128,7 @@ echo $AMENT_PREFIX_PATH
 ```bash
 # Clean build (recommended after code changes)
 rm -rf build install log
-colcon build --packages-select pole_detection lslidar_driver
+colcon build --packages-select pole_detection
 
 # Source workspace
 source install/setup.bash
@@ -436,7 +436,7 @@ ros2 launch pole_detection pole_detection.launch.py start_rviz:=true \
 When you launch in debug mode, RViz will display **comprehensive enhanced visualization** of the entire detection pipeline with detailed labels, markers, and real-time statistics.
 
 **For complete visualization guide, see:**
-- [ENHANCED_VISUALIZATION_GUIDE.md](file:///home/rc2/FINN/pole/n10p_lidar/docs/ENHANCED_VISUALIZATION_GUIDE.md) - Complete visualization reference
+- [ENHANCED_VISUALIZATION_GUIDE.md](file:///home/rc3/Desktop/n10p_lidar/docs/ENHANCED_VISUALIZATION_GUIDE.md) - Complete visualization reference
 
 ### Enhanced Visualization Features
 
@@ -503,7 +503,7 @@ Pattern Ratio: 100.00%
    - **Command**: Check red labels for specific reasons
 
 **For detailed visualization guide and troubleshooting, see:**
-- [ENHANCED_VISUALIZATION_GUIDE.md](file:///home/rc2/FINN/pole/n10p_lidar/docs/ENHANCED_VISUALIZATION_GUIDE.md)
+- [ENHANCED_VISUALIZATION_GUIDE.md](file:///home/rc3/Desktop/n10p_lidar/docs/ENHANCED_VISUALIZATION_GUIDE.md)
 
 ---
 
@@ -706,8 +706,7 @@ Watch `/debug/pipeline` topic in RViz for real-time metrics:
 
 ```bash
 # Launch with debug logging
-ros2 launch pole_detection pole_detection_debug.launch.py \
-  serial_port:=/dev/ttyACM0 \
+ros2 launch pole_detection pole_detection.launch.py start_rviz:=true \
   --ros-args --log-level debug
 ```
 
@@ -890,8 +889,8 @@ ros2 param dump /pole_detection > current_params.yaml
 
 ## Related Documentation
 
-- [README.md](file:///home/rc2/FINN/pole/n10p_lidar/docs/README.md) - Complete system documentation
-- [COMPREHENSIVE_COMPARISON.md](file:///home/rc2/FINN/pole/n10p_lidar/docs/COMPREHENSIVE_COMPARISON.md) - Comparison with rc2026_head_finder
+- [README.md](file:///home/rc3/Desktop/n10p_lidar/docs/README.md) - Complete system documentation
+- [COMPREHENSIVE_COMPARISON.md](file:///home/rc3/Desktop/n10p_lidar/docs/COMPREHENSIVE_COMPARISON.md) - Comparison with rc2026_head_finder
 
 ---
 

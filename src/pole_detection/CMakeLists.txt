@@ -147,7 +147,6 @@ ament_export_dependencies(
   sensor_msgs
   geometry_msgs
   visualization_msgs
-  lslidar_msgs
   pcl_conversions
   rclcpp_action
 )

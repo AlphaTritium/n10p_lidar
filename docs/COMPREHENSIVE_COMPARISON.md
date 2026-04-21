@@ -260,7 +260,7 @@ struct ClusterFeatures {
     double arc_length;           // Sum of distances between consecutive points
     double angular_span;         // Angular extent in degrees
     double radial_width;        // Maximum dimension (not radius)
-    double curvature_estimate;    // 1/radius from circle fitting
+    double curvature;    // 1/radius from circle fitting
     double range_from_sensor;    // Distance to cluster
     double avg_intensity;        // Average reflection intensity
     double bbox_area;          // Bounding box area
@@ -359,8 +359,8 @@ double validator::computeLikelihoodScore(const ClusterFeatures& f)
     
     // FEATURE 5: CURVATURE
     max_possible_score += config_.weight_curvature;
-    if (f.curvature_estimate >= config_.min_curvature && 
-        f.curvature_estimate <= config_.max_curvature) {
+    if (f.curvature >= config_.min_curvature && 
+        f.curvature <= config_.max_curvature) {
         score += config_.weight_curvature;
     }
     

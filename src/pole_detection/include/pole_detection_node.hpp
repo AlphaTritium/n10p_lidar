@@ -22,9 +22,12 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
-#include <lslidar_msgs/msg/detected_objects.hpp>
+#include <pole_detection/msg/detected_objects.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
+#include <std_msgs/msg/float32_multi_array.hpp>
 #include <rclcpp_action/rclcpp_action.hpp>
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
 #include <thread>
 #include <mutex>
 #include <atomic>
@@ -303,8 +306,8 @@ private:
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr cloud_sub_;
   
   // Publishers
-  rclcpp::Publisher<lslidar_msgs::msg::DetectedObjects>::SharedPtr objects_pub_;
-  rclcpp::Publisher<lslidar_msgs::msg::DetectedObjects>::SharedPtr poles_pub_;
+  rclcpp::Publisher<pole_detection::msg::DetectedObjects>::SharedPtr objects_pub_;
+  rclcpp::Publisher<pole_detection::msg::DetectedObjects>::SharedPtr poles_pub_;
   
   // Processing modules
   std::unique_ptr<Clusterer> clusterer_;
